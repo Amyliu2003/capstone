@@ -1,0 +1,44 @@
+{
+  "name": "capstone",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "tsx server/server.ts",
+    "dev:all": "lsof -ti :8787 | xargs kill 2>/dev/null || true; concurrently -n web,server -c auto \"vite\" \"tsx server/server.ts\"",
+    "dev:fresh": "npm run dev:all",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "chess.js": "^1.4.0",
+    "dotenv": "^17.3.1",
+    "express": "^5.1.0",
+    "gsap": "^3.14.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "stockfish": "^18.0.5",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "tsx": "^4.20.6",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.48.0",
+    "vite": "^7.3.1"
+  }
+}

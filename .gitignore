@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.DS_Store
+
+# Vite
+capstone/dist/
+capstone/node_modules/
+capstone/.env
+capstone/.env.*
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
