@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { piDigits, maxDigits } from './piDigits'
+import type { PiGraphSnapshot } from '../../gameSave/gameStorage'
 
 const RADIUS_RATIO = 0.35
 const NODE_RADIUS_RATIO = 0.025
@@ -9,9 +10,9 @@ const DIGITS_PER_FRAME_INTERVAL = 60
 const PROGRESS_SPEED = 0.03
 const WEIGHT_GROWTH = 6
 
-/** Plain dark palette */
-const FILL_CREAM = '#f5f0e5'
-const STROKE_DARK = '#1B2A4A'
+/** Default visuals (overridable via props for design-system injection). */
+const DEFAULT_NODE_FILL = '#f5f0e5'
+const DEFAULT_NODE_STROKE = '#1B2A4A'
 
 type Node = { digit: number; x: number; y: number }
 
@@ -44,13 +45,78 @@ function computeNodes(size: number): Node[] {
 export type PiGraphCanvasProps = {
   /** Max number of transitions to show (level-gated). Omit = use maxDigits. */
   unlockedEdges?: number
+  nodeFill?: string
+  nodeStroke?: string
+  edgeStroke?: string
+  animatedEdgeStroke?: string
+  labelColor?: string
+  initialPiSnapshot?: PiGraphSnapshot | null
 }
 
-export function PiGraphCanvas({ unlockedEdges }: PiGraphCanvasProps = {}) {
+export type PiGraphCanvasHandle = {
+  getSnapshot: () => PiGraphSnapshot
+}
+
+export const PiGraphCanvas = forwardRef<PiGraphCanvasHandle, PiGraphCanvasProps>(function PiGraphCanvas(
+  {
+    unlockedEdges,
+    nodeFill = DEFAULT_NODE_FILL,
+    nodeStroke = DEFAULT_NODE_STROKE,
+    edgeStroke = nodeStroke,
+    animatedEdgeStroke = edgeStroke,
+    labelColor = nodeStroke,
+    initialPiSnapshot,
+  }: PiGraphCanvasProps,
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const unlockedEdgesRef = useRef<number | undefined>(unlockedEdges)
   unlockedEdgesRef.current = unlockedEdges
+  const visualsRef = useRef({
+    nodeFill,
+    nodeStroke,
+    edgeStroke,
+    animatedEdgeStroke,
+    labelColor,
+  })
+
+  // Keep visuals in sync without restarting the animation loop.
+  visualsRef.current = {
+    nodeFill,
+    nodeStroke,
+    edgeStroke,
+    animatedEdgeStroke,
+    labelColor,
+  }
+
+  const cloneTransitions = (t: PiGraphSnapshot['transitions']): PiGraphSnapshot['transitions'] => {
+    const out: PiGraphSnapshot['transitions'] = {}
+    for (const from of Object.keys(t)) {
+      out[from] = { ...(t[from] ?? {}) }
+    }
+    return out
+  }
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getSnapshot: () => {
+        const s = stateRef.current
+        return {
+          transitions: cloneTransitions(s.transitions),
+          currentFrom: s.currentFrom,
+          currentTo: s.currentTo,
+          progress: s.progress,
+          digitsShown: s.digitsShown,
+          transitionCount: s.transitionCount,
+          globalCycleWeight: s.globalCycleWeight,
+          frameCount: s.frameCount,
+        }
+      },
+    }),
+    [],
+  )
   const stateRef = useRef({
     nodes: [] as Node[],
     transitions: {} as Record<string, Record<string, number>>,
@@ -80,26 +146,37 @@ export function PiGraphCanvas({ unlockedEdges }: PiGraphCanvasProps = {}) {
     setSize(DEFAULT_SIZE)
 
     const initialUnlocked = Math.max(0, unlockedEdgesRef.current ?? 0)
-    for (let i = 0; i < initialUnlocked; i++) {
-      const a = piDigits[state.digitsShown - 1]
-      const b = piDigits[state.digitsShown]
-      if (i < initialUnlocked - 1) {
-        if (!state.transitions[a]) state.transitions[a] = {}
-        if (!state.transitions[a][b]) state.transitions[a][b] = 0
-        state.transitions[a][b]++
-        state.transitionCount++
-        state.globalCycleWeight = 1 + state.transitionCount * 0.002
-      } else {
-        state.currentFrom = parseInt(a, 10)
-        state.currentTo = parseInt(b, 10)
+    if (initialPiSnapshot) {
+      state.transitions = cloneTransitions(initialPiSnapshot.transitions)
+      state.currentFrom = initialPiSnapshot.currentFrom
+      state.currentTo = initialPiSnapshot.currentTo
+      state.progress = initialPiSnapshot.progress
+      state.digitsShown = initialPiSnapshot.digitsShown
+      state.transitionCount = initialPiSnapshot.transitionCount
+      state.globalCycleWeight = initialPiSnapshot.globalCycleWeight
+      state.frameCount = initialPiSnapshot.frameCount
+    } else {
+      for (let i = 0; i < initialUnlocked; i++) {
+        const a = piDigits[state.digitsShown - 1]
+        const b = piDigits[state.digitsShown]
+        if (i < initialUnlocked - 1) {
+          if (!state.transitions[a]) state.transitions[a] = {}
+          if (!state.transitions[a][b]) state.transitions[a][b] = 0
+          state.transitions[a][b]++
+          state.transitionCount++
+          state.globalCycleWeight = 1 + state.transitionCount * 0.002
+        } else {
+          state.currentFrom = parseInt(a, 10)
+          state.currentTo = parseInt(b, 10)
+          state.progress = 0
+        }
+        state.digitsShown++
+      }
+      if (initialUnlocked === 0) {
+        state.currentFrom = null
+        state.currentTo = null
         state.progress = 0
       }
-      state.digitsShown++
-    }
-    if (initialUnlocked === 0) {
-      state.currentFrom = null
-      state.currentTo = null
-      state.progress = 0
     }
 
     const ro = new ResizeObserver((entries) => {
@@ -160,6 +237,8 @@ export function PiGraphCanvas({ unlockedEdges }: PiGraphCanvasProps = {}) {
 
       ctx.clearRect(0, 0, width, height)
 
+      const { nodeFill: vf, nodeStroke: vs, edgeStroke: es, animatedEdgeStroke: aes, labelColor: lc } = visualsRef.current
+
       const maxW = getMaxWeight(transitions)
       for (const from of Object.keys(transitions)) {
         for (const to of Object.keys(transitions[from])) {
@@ -171,7 +250,7 @@ export function PiGraphCanvas({ unlockedEdges }: PiGraphCanvasProps = {}) {
           ctx.beginPath()
           ctx.moveTo(a.x, a.y)
           ctx.lineTo(b.x, b.y)
-          ctx.strokeStyle = STROKE_DARK
+          ctx.strokeStyle = es
           ctx.globalAlpha = 0.3 + 0.5 * (w / maxW)
           ctx.lineWidth = 1 + 2 * (w / maxW)
           ctx.stroke()
@@ -182,9 +261,9 @@ export function PiGraphCanvas({ unlockedEdges }: PiGraphCanvasProps = {}) {
       for (const n of nodes) {
         ctx.beginPath()
         ctx.arc(n.x, n.y, nodeRadius, 0, Math.PI * 2)
-        ctx.fillStyle = FILL_CREAM
+        ctx.fillStyle = vf
         ctx.fill()
-        ctx.strokeStyle = STROKE_DARK
+        ctx.strokeStyle = vs
         ctx.lineWidth = 1
         ctx.stroke()
       }
@@ -198,17 +277,17 @@ export function PiGraphCanvas({ unlockedEdges }: PiGraphCanvasProps = {}) {
         ctx.beginPath()
         ctx.moveTo(a.x, a.y)
         ctx.lineTo(x, y)
-        ctx.strokeStyle = STROKE_DARK
+        ctx.strokeStyle = aes
         ctx.lineWidth = (1 + state.progress * WEIGHT_GROWTH) * state.globalCycleWeight
         ctx.stroke()
 
         ctx.beginPath()
         ctx.arc(x, y, headRadius, 0, Math.PI * 2)
-        ctx.fillStyle = STROKE_DARK
+        ctx.fillStyle = aes
         ctx.fill()
       }
 
-      ctx.fillStyle = STROKE_DARK
+      ctx.fillStyle = lc
       ctx.font = `${Math.max(10, width * 0.022)}px system-ui, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -243,4 +322,4 @@ export function PiGraphCanvas({ unlockedEdges }: PiGraphCanvasProps = {}) {
       />
     </div>
   )
-}
+})

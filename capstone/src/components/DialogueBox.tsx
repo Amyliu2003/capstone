@@ -46,12 +46,12 @@ export function DialogueBox({ visible, node, onAdvance, npcOnly = false }: Dialo
           width: '100%',
           maxWidth: 900,
           margin: 0,
-          border: '1px solid #555',
+          border: '1px solid var(--ds-border, #333)',
           padding: 12,
           overflowY: 'auto',
         }}
       >
-        <div style={{ fontSize: 11, marginBottom: 4 }}>H.D.</div>
+        <div style={{ fontSize: 11, marginBottom: 4, color: 'var(--ds-subtle, #666)' }}>H.D.</div>
         <div>{node.npc}</div>
       </section>
     )
@@ -65,7 +65,7 @@ export function DialogueBox({ visible, node, onAdvance, npcOnly = false }: Dialo
         width: '100%',
         maxWidth: 900,
         margin: 0,
-        border: '1px solid #555',
+        border: '1px solid var(--ds-border, #333)',
         padding: 12,
         display: 'flex',
         flexDirection: 'row',

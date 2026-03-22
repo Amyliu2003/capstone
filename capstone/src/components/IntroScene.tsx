@@ -1,27 +1,16 @@
-import type { CSSProperties } from 'react'
+import { DSButton } from '../designSystem/components/DSButton'
+import { SceneHost } from '../layout/SceneHost'
 
 export type IntroSceneProps = {
   onStart: () => void
 }
 
 export function IntroScene({ onStart }: IntroSceneProps) {
-  const full: CSSProperties = {
-    width: '100%',
-    height: '100%',
-    minHeight: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
-    boxSizing: 'border-box',
-  }
-
   return (
-    <div style={full}>
+    <SceneHost>
       <div
         style={{
-          width: '100%',
-          height: '100%',
+          flex: 1,
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
@@ -36,11 +25,11 @@ export function IntroScene({ onStart }: IntroSceneProps) {
           The screen stays still. New edges appear step-by-step.
         </div>
 
-        <button type="button" onClick={onStart} style={{ width: 160 }}>
+        <DSButton type="button" onClick={onStart} style={{ width: 160 }}>
           Done
-        </button>
+        </DSButton>
       </div>
-    </div>
+    </SceneHost>
   )
 }
 

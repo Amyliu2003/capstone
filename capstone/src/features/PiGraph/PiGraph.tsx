@@ -1,12 +1,17 @@
-import { PiGraphCanvas } from './PiGraphCanvas'
+import { forwardRef } from 'react'
+import { useDesignSystem } from '../../designSystem/DesignSystemProvider'
+import { PiGraphCanvas, type PiGraphCanvasHandle } from './PiGraphCanvas'
+import type { PiGraphSnapshot } from '../../gameSave/gameStorage'
 
 export type PiGraphProps = {
   unlockedEdges?: number
   onComplete?: () => void
+  initialPiSnapshot?: PiGraphSnapshot | null
 }
 
-export function PiGraph(props: PiGraphProps = {}) {
-  const { unlockedEdges = 0, onComplete } = props
+export const PiGraph = forwardRef<PiGraphCanvasHandle, PiGraphProps>(function PiGraph(props: PiGraphProps, ref) {
+  const { unlockedEdges = 0, onComplete, initialPiSnapshot } = props
+  const tokens = useDesignSystem()
   return (
     <section
       style={{
@@ -28,7 +33,16 @@ export function PiGraph(props: PiGraphProps = {}) {
           overflow: 'hidden',
         }}
       >
-        <PiGraphCanvas unlockedEdges={unlockedEdges} />
+        <PiGraphCanvas
+          ref={ref}
+          unlockedEdges={unlockedEdges}
+          initialPiSnapshot={initialPiSnapshot}
+          nodeFill={tokens.colors.bg}
+          nodeStroke={tokens.colors.fg}
+          edgeStroke={tokens.colors.fg}
+          animatedEdgeStroke={tokens.colors.fg}
+          labelColor={tokens.colors.fg}
+        />
         {unlockedEdges > 0 && (
           <div style={{ flexShrink: 0, fontSize: 14 }}>
             Edges unlocked: <strong>{unlockedEdges}</strong>
@@ -42,4 +56,4 @@ export function PiGraph(props: PiGraphProps = {}) {
       )}
     </section>
   )
-}
+})
