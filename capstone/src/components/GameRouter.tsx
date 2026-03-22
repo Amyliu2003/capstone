@@ -1,11 +1,18 @@
-import { useCallback } from 'react'
+import { useCallback, type CSSProperties, type Ref } from 'react'
 import { useGameState } from '../context/GameState'
 import { PiGraph } from '../features/PiGraph/PiGraph'
-import { UnlawfulChessboard } from '../features/UnlawfulChessboard/UnlawfulChessboard'
+import { UnlawfulChessboard, type UnlawfulChessboardHandle } from '../features/UnlawfulChessboard/UnlawfulChessboard'
+import type { PiGraphCanvasHandle } from '../features/PiGraph/PiGraphCanvas'
 import type { ChessResult, PiResult } from '../context/GameState'
 
-export function GameRouter() {
-  const { currentLevel, currentPhase, levelConfig, advancePhase } = useGameState()
+export type GameRouterProps = {
+  chessRef?: Ref<UnlawfulChessboardHandle>
+  piRef?: Ref<PiGraphCanvasHandle>
+}
+
+export function GameRouter(props: GameRouterProps = {}) {
+  const { chessRef, piRef } = props
+  const { currentLevel, currentPhase, levelConfig, advancePhase, initialChessSnapshot, initialPiSnapshot, runSeed } = useGameState()
 
   const onChessComplete = useCallback(
     (result: ChessResult) => {
@@ -21,7 +28,7 @@ export function GameRouter() {
     [advancePhase],
   )
 
-  const containerStyle: React.CSSProperties = {
+  const containerStyle: CSSProperties = {
     height: '100%',
     minHeight: 0,
     overflow: 'hidden',
@@ -41,7 +48,10 @@ export function GameRouter() {
     return (
       <div style={containerStyle}>
         <UnlawfulChessboard
+          key={runSeed}
+          ref={chessRef}
           disabledRule={levelConfig.disabledRule}
+          initialChessSnapshot={initialChessSnapshot}
           onComplete={onChessComplete}
         />
       </div>
@@ -52,8 +62,11 @@ export function GameRouter() {
     return (
       <div style={containerStyle}>
         <PiGraph
+          key={runSeed}
+          ref={piRef}
           unlockedEdges={currentLevel}
           onComplete={onPiComplete}
+          initialPiSnapshot={initialPiSnapshot}
         />
       </div>
     )

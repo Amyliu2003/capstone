@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Chess, type Square } from 'chess.js'
 import { gsap } from 'gsap'
+import type { ChessSnapshot, SerializedBoardState } from '../../gameSave/gameStorage'
 
 const EVAL_BAR_WIDTH = 14
 const EVAL_BAR_ANIMATION_DURATION = 0.4
@@ -156,11 +157,17 @@ export type ChessCompleteResult = {
 
 export type UnlawfulChessboardProps = {
   disabledRule?: string
+  initialChessSnapshot?: ChessSnapshot | null
   onComplete?: (result: ChessCompleteResult) => void
 }
 
-export function UnlawfulChessboard(props: UnlawfulChessboardProps = {}) {
-  const { disabledRule, onComplete } = props
+export type UnlawfulChessboardHandle = {
+  getSnapshot: () => ChessSnapshot
+}
+
+export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulChessboardProps>(
+  function UnlawfulChessboard(props: UnlawfulChessboardProps = {}, ref) {
+    const { disabledRule, initialChessSnapshot, onComplete } = props
   const gameRef = useRef(new Chess())
   const [boardState, setBoardState] = useState<BoardState>(() =>
     cloneBoard(new Chess().board() as BoardState),
@@ -176,6 +183,34 @@ export function UnlawfulChessboard(props: UnlawfulChessboardProps = {}) {
   const evalBarWhiteRef = useRef<HTMLDivElement>(null)
   const evalBarDarkRef = useRef<HTMLDivElement>(null)
   const lastBarPercentRef = useRef(50)
+
+    // Hydrate exact gameplay state when loading a saved game.
+    useEffect(() => {
+      if (!initialChessSnapshot) return
+      const snap = initialChessSnapshot
+      gameRef.current = new Chess(snap.fen)
+      setBoardState(cloneBoard(snap.boardState as unknown as BoardState))
+      setMoveHistory(snap.moveHistory)
+      setCurrentTurn(snap.currentTurn)
+      setSelected(null)
+      setMovingPiece(null)
+      setEvaluation(null)
+      setEvaluationLoading(false)
+      setEvaluationError(null)
+    }, [initialChessSnapshot])
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        getSnapshot: () => ({
+          fen: gameRef.current.fen(),
+          boardState: cloneBoard(boardState) as unknown as SerializedBoardState,
+          moveHistory,
+          currentTurn,
+        }),
+      }),
+      [boardState, moveHistory, currentTurn],
+    )
 
   useEffect(() => {
     if (movingPiece || moveHistory.length === 0) {
@@ -375,7 +410,7 @@ export function UnlawfulChessboard(props: UnlawfulChessboardProps = {}) {
     })
   }, [onComplete, moveHistory])
 
-  return (
+    return (
     <section style={{ display: 'grid', gap: 12 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>Unlawful Chessboard</h2>
@@ -590,5 +625,6 @@ export function UnlawfulChessboard(props: UnlawfulChessboardProps = {}) {
         </div>
       </div>
     </section>
-  )
-}
+    )
+  },
+)
