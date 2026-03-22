@@ -1,30 +1,149 @@
 import { useMemo, useState } from 'react'
+import { DSButton } from '../../designSystem/components/DSButton'
 import { fetchEtymology } from './api'
 import { JABBERWOCKY } from './jabberwocky'
 import { buildMarkovModel, generateWord, type CorpusConfig } from './markov'
+import type { EtymologyVariant } from './types'
 
 type EngineState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'done'; story: string }
+  | { status: 'done'; variants: EtymologyVariant[] }
   | { status: 'error'; message: string }
-
-export type EtymologyCompleteResult = { chosenDefinitionIndex: number }
 
 export type EtymologyEngineProps = {
   levelMode?: boolean
   levelWord?: string
-  definitions?: string[]
-  onComplete?: (result: EtymologyCompleteResult) => void
+  /** Four or more LLM + distractor variants; pick one to complete. */
+  variants?: EtymologyVariant[]
+  onComplete?: (chosen: EtymologyVariant) => void
 }
 
 const defaultCorpus: CorpusConfig = { text: JABBERWOCKY }
 
+/** Label for choice cards: `variant.text` only — never `explanation`, the full object, or stringified JSON. */
+function variantCardLabel(variant: EtymologyVariant): string {
+  const text = variant.text
+  if (text.length > 100) {
+    // eslint-disable-next-line no-console
+    console.warn('[EtymologyEngine] variant.text longer than 100 characters — possible regression.', text.length)
+  }
+  return text
+}
+
+export type EtymologyQuizRadioListProps = {
+  variants: EtymologyVariant[]
+  selected: number | null
+  onSelect: (i: number) => void
+  onConfirm: () => void
+}
+
+/** Radio-style quiz list + full-width Confirm (used in level mode and GameScene). */
+export function EtymologyQuizRadioList({ variants, selected, onSelect, onConfirm }: EtymologyQuizRadioListProps) {
+  // eslint-disable-next-line no-console
+  console.log('variants count:', variants.length)
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        gap: 10,
+        background: '#fffdf8',
+      }}
+    >
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          paddingLeft: 12,
+          paddingRight: 12,
+          paddingTop: 4,
+          paddingBottom: 4,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        {variants.map((variant, i) => (
+          <div
+            key={i}
+            role="button"
+            tabIndex={0}
+            onClick={() => onSelect(i)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onSelect(i)
+              }
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 12,
+              padding: '12px 16px',
+              cursor: 'pointer',
+              borderLeft: selected === i ? '3px solid var(--ds-fg, #1a1a1a)' : '3px solid transparent',
+              background: selected === i ? 'rgba(0,0,0,0.06)' : 'transparent',
+              color: 'var(--ds-fg, #1a1a1a)',
+            }}
+          >
+            <div
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: '50%',
+                border: '2px solid var(--ds-fg, #1a1a1a)',
+                flexShrink: 0,
+                marginTop: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-hidden
+            >
+              {selected === i ? (
+                <div
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    background: 'var(--ds-fg, #1a1a1a)',
+                  }}
+                />
+              ) : null}
+            </div>
+            <span
+              style={{
+                flex: 1,
+                textAlign: 'left',
+                fontSize: 14,
+                lineHeight: 1.45,
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {variantCardLabel(variant)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div style={{ paddingLeft: 12, paddingRight: 12, paddingBottom: 8, flexShrink: 0 }}>
+        <DSButton type="button" disabled={selected === null} onClick={onConfirm} style={{ width: '100%', padding: '12px 16px' }}>
+          Confirm
+        </DSButton>
+      </div>
+    </div>
+  )
+}
+
 export function EtymologyEngine(props: EtymologyEngineProps = {}) {
-  const { levelMode, levelWord, definitions = [], onComplete } = props
+  const { levelMode, levelWord, variants = [], onComplete } = props
   const model = useMemo(() => buildMarkovModel(defaultCorpus, { order: 4 }), [])
   const [word, setWord] = useState('')
   const [state, setState] = useState<EngineState>({ status: 'idle' })
+  const [selected, setSelected] = useState<number | null>(null)
 
   const canGenerate = word.trim().length > 0 && state.status !== 'loading'
 
@@ -37,7 +156,7 @@ export function EtymologyEngine(props: EtymologyEngineProps = {}) {
         tone: 'deadpan',
         include: ['origin_language', 'century', 'semantic_shift', 'fake_citations'],
       })
-      setState({ status: 'done', story: res.story })
+      setState({ status: 'done', variants: res.variants })
     } catch (e) {
       setState({ status: 'error', message: e instanceof Error ? e.message : 'Unknown error' })
     }
@@ -49,36 +168,33 @@ export function EtymologyEngine(props: EtymologyEngineProps = {}) {
     setState({ status: 'idle' })
   }
 
-  if (levelMode && levelWord !== undefined && definitions.length >= 4 && onComplete) {
+  if (levelMode && levelWord !== undefined && variants.length >= 4 && onComplete) {
     return (
-      <section style={{ display: 'grid', gap: 12 }}>
-        <header style={{ display: 'grid', gap: 4 }}>
+      <section
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          height: '100%',
+          minHeight: 0,
+        }}
+      >
+        <header style={{ display: 'grid', gap: 4, flexShrink: 0 }}>
           <h2 style={{ margin: 0 }}>Etymology Engine</h2>
           <div style={{ fontSize: 14, opacity: 0.8 }}>
             Pick the definition that fits the word.
           </div>
         </header>
-        <div style={{ fontSize: 18, fontWeight: 600 }}>Word: {levelWord}</div>
-        <div style={{ display: 'grid', gap: 8 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>Choose one:</div>
-          {definitions.map((text, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => onComplete({ chosenDefinitionIndex: i })}
-              style={{
-                padding: 12,
-                textAlign: 'left',
-                cursor: 'pointer',
-                border: '1px solid #333',
-                borderRadius: 4,
-                backgroundColor: '#fafafa',
-              }}
-            >
-              {text}
-            </button>
-          ))}
-        </div>
+        <div style={{ fontSize: 18, fontWeight: 600, flexShrink: 0 }}>Word: {levelWord}</div>
+        <EtymologyQuizRadioList
+          variants={variants}
+          selected={selected}
+          onSelect={setSelected}
+          onConfirm={() => {
+            if (selected === null) return
+            onComplete(variants[selected]!)
+          }}
+        />
       </section>
     )
   }
@@ -119,12 +235,24 @@ export function EtymologyEngine(props: EtymologyEngineProps = {}) {
         {state.status === 'loading' && <div>Loading…</div>}
         {state.status === 'error' && <div style={{ color: 'crimson' }}>{state.message}</div>}
         {state.status === 'done' && (
-          <pre style={{ whiteSpace: 'pre-wrap', margin: 0, padding: 8 }}>
-            {state.story}
-          </pre>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              padding: 12,
+              background: '#fffdf8',
+              borderRadius: 8,
+            }}
+          >
+            {state.variants.map((variant, i) => (
+              <p key={i} style={{ margin: 0, fontSize: 14, lineHeight: 1.45, textAlign: 'left', color: 'var(--ds-fg, #1a1a1a)' }}>
+                {variantCardLabel(variant)}
+              </p>
+            ))}
+          </div>
         )}
       </div>
     </section>
   )
 }
-
