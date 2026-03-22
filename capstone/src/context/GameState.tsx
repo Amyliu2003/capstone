@@ -6,6 +6,12 @@ export type GamePhase = 'etymology' | 'chess' | 'pi'
 
 export type LevelHistoryEntry = {
   chosenDefinitionIndex?: number
+  /** Player-authored definition for the etymology phase (current flow). */
+  playerDefinition?: string
+  /** Index into the 4 shuffled options (0–3). */
+  chosenVariantIndex?: number
+  /** Whether the player picked Carroll / Humpty’s canonical definition. */
+  isCanonical?: boolean
   moves?: Array<{ notation: string; illegal?: boolean }>
 }
 
@@ -23,7 +29,11 @@ export type GameStateValue = {
   resetGame: () => void
 }
 
-export type EtymologyResult = { chosenDefinitionIndex: number }
+export type EtymologyResult = {
+  playerDefinition: string
+  chosenVariantIndex: number
+  isCanonical: boolean
+}
 export type ChessResult = { moves: Array<{ notation: string; illegal?: boolean }> }
 export type PiResult = Record<string, never>
 
@@ -58,8 +68,14 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
         const next = [...prev]
         while (next.length < currentLevel) next.push({})
         const entry = next[currentLevel - 1] ?? {}
-        if ('chosenDefinitionIndex' in result) {
-          next[currentLevel - 1] = { ...entry, chosenDefinitionIndex: result.chosenDefinitionIndex }
+        if ('playerDefinition' in result && 'chosenVariantIndex' in result) {
+          const er = result as EtymologyResult
+          next[currentLevel - 1] = {
+            ...entry,
+            playerDefinition: er.playerDefinition,
+            chosenVariantIndex: er.chosenVariantIndex,
+            isCanonical: er.isCanonical,
+          }
         } else if ('moves' in result) {
           next[currentLevel - 1] = { ...entry, moves: result.moves }
         }

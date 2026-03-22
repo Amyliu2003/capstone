@@ -38,9 +38,11 @@ export function GameRouter(props: GameRouterProps = {}) {
 
   if (currentPhase === 'etymology' && levelConfig) {
     return (
-      <section style={containerStyle}>
-        <p>Pick a definition in the dialogue below.</p>
-      </section>
+      <div style={containerStyle}>
+        <section style={{ padding: '0 4px', fontSize: 14, opacity: 0.85 }}>
+          Use the dialogue below to enter your definition and continue.
+        </section>
+      </div>
     )
   }
 
@@ -65,7 +67,7 @@ export function GameRouter(props: GameRouterProps = {}) {
           key={runSeed}
           ref={piRef}
           unlockedEdges={currentLevel}
-          onComplete={onPiComplete}
+          onComplete={() => onPiComplete({} as PiResult)}
           initialPiSnapshot={initialPiSnapshot}
         />
       </div>

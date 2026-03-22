@@ -6,13 +6,13 @@ export function AppFrame({ children }: { children: ReactNode }) {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        padding: 12,
-        width: '100%',
-        maxWidth: 900,
-        height: '100%',
+        width: 'min(100vw, calc(100dvh * 9 / 16))',
+        height: '100dvh',
+        aspectRatio: '9 / 16',
         minHeight: 0,
         margin: 0,
         boxSizing: 'border-box',
+        overflow: 'hidden',
         backgroundColor: '#ffffff',
         color: '#1a1a1a',
       }}
