@@ -67,14 +67,18 @@ function isChessSnapshot(value: unknown): value is ChessSnapshot {
 function normalizeAndValidateSnapshot(value: unknown): GameSnapshotV1 | null {
   if (!isRecord(value)) return null
   if (value.version !== 1) return null
-  if (!Number.isInteger(value.currentLevel) || value.currentLevel < 1 || value.currentLevel > 8) return null
-  if (value.currentPhase !== 'etymology' && value.currentPhase !== 'chess' && value.currentPhase !== 'pi') return null
+  const currentLevel = value.currentLevel
+  if (typeof currentLevel !== 'number' || !Number.isInteger(currentLevel) || currentLevel < 1 || currentLevel > 8) {
+    return null
+  }
+  const currentPhase = value.currentPhase
+  if (currentPhase !== 'etymology' && currentPhase !== 'chess' && currentPhase !== 'pi') return null
   if (!Array.isArray(value.levelHistory)) return null
 
   const out: GameSnapshotV1 = {
     version: 1,
-    currentLevel: value.currentLevel,
-    currentPhase: value.currentPhase,
+    currentLevel,
+    currentPhase,
     levelHistory: value.levelHistory as LevelHistoryEntry[],
   }
 

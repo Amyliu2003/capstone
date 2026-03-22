@@ -4,7 +4,8 @@ import { ThreeFrame } from './ThreeFrame'
 export type DialogueNode =
   | { type: 'auto'; npc: string }
   | { type: 'choice'; npc: string; options: string[]; onSelect: (i: number) => void }
-  | { type: 'input'; npc: string; onSubmit: (text: string) => void }
+  | { type: 'input'; npc: string; onSubmit: (text: string) => void | Promise<void>; disabled?: boolean }
+  | { type: 'loading'; npc: string }
 
 export interface DialogueBoxProps {
   visible: boolean
@@ -102,9 +103,20 @@ export function DialogueBox({ visible, node, onAdvance, npcOnly = false }: Dialo
             handleInputSubmit(e)
           }}
         >
-          <input name="dialogue-input" placeholder="…" autoComplete="off" style={{ flex: 1, padding: 8 }} />
-          <button type="submit">Submit</button>
+          <input
+            name="dialogue-input"
+            placeholder="…"
+            autoComplete="off"
+            disabled={node.disabled}
+            style={{ flex: 1, padding: 8 }}
+          />
+          <button type="submit" disabled={node.disabled}>
+            Submit
+          </button>
         </form>
+      )}
+      {node.type === 'loading' && (
+        <div style={{ flex: 1, minWidth: 0, opacity: 0.9, fontSize: 14 }}>{node.npc}</div>
       )}
     </section>
   )
