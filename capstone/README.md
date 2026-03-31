@@ -1,78 +1,127 @@
-# React + TypeScript + Vite
+# Capstone — Humpty Dumpty’s playground
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A browser game built with **React**, **TypeScript**, and **Vite**: progress through **etymology** (LLM-generated nonsense word histories in a Carroll / Humpty Dumpty style), **chess** (custom board with Stockfish), and a **π transition graph** — with save/load and a small design-token layer.
 
-## Etymology Engine (dev server)
+---
 
-- **Run:** `npm run dev:fresh` (or `npm run dev:all`) from this folder. Put `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (and optionally `LLM_PROVIDER=openai`) in `.env`.
-- **"Missing ANTHROPIC_API_KEY" in the app:** An old server is still on port 8787. In a terminal run: `lsof -ti :8787 | xargs kill`, then run `npm run dev:fresh` again. To use OpenAI instead, add `OPENAI_API_KEY` and `LLM_PROVIDER=openai` to `.env`.
+## Features
 
-Currently, two official plugins are available:
+| Area | What it does |
+|------|----------------|
+| **Etymology** | Markov-generated or hand-typed words; optional player definition; LLM returns structured variants via a local API proxy (keys stay on the server). |
+| **Chess** | `UnlawfulChessboard` + `chess.js` + embedded Stockfish; snapshots for persistence. |
+| **Pi graph** | Digits of π drive edge transitions; canvas scales with the layout; level-gated edges. |
+| **Game flow** | Intro → game with phases `etymology` → `chess` → `pi`; `GameStateProvider` holds level and history. |
+| **Save / load** | Versioned `localStorage` snapshot (`capstone.gameSnapshot.v1`); settings UI for save, load, restart. |
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+> [!NOTE]
+> Detailed implementation notes live in [`docs/blog/PROJECT_SUMMARY.md`](docs/blog/PROJECT_SUMMARY.md). Etymology engine design notes: [`docs/blog/ETYMOLOGY_ENGINE_SUMMARY.md`](docs/blog/ETYMOLOGY_ENGINE_SUMMARY.md).
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Prerequisites
 
-## Expanding the ESLint configuration
+- **Node.js** (LTS recommended) and **npm**
+- For **etymology**: at least one of **`ANTHROPIC_API_KEY`** or **`OPENAI_API_KEY`** in `.env` (see below)
+- **Stockfish** available on your `PATH` unless you set `STOCKFISH_PATH` (used by the server for chess analysis routes)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Quick start
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+From the project root (the folder that contains `package.json`):
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Frontend only (no LLM / API)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+Opens the Vite dev server (default **http://localhost:5173**).
+
+### Full stack (Vite + API server)
+
+```bash
+npm run dev:all
+```
+
+Runs Vite and the Express server in parallel. The API listens on **http://localhost:8787** by default; the dev server **proxies `/api`** to that port (see `vite.config.ts`).
+
+> [!TIP]
+> Use `npm run dev:fresh` as an alias for `dev:all` if you prefer a single command name.
+
+---
+
+## Configuration
+
+Create a **`.env`** file in the **`capstone`** app directory (next to `package.json`). The Node server loads it from there.
+
+| Variable | Purpose |
+|----------|---------|
+| `ANTHROPIC_API_KEY` | Anthropic API key (Messages API) |
+| `OPENAI_API_KEY` | OpenAI API key (Chat Completions) |
+| `LLM_PROVIDER` | Optional: `openai` or `anthropic` when both keys exist |
+| `ANTHROPIC_MODEL` / `OPENAI_MODEL` | Optional model overrides |
+| `PORT` | API server port (default **8787**) |
+| `STOCKFISH_PATH` | Path to Stockfish binary if not on `PATH` |
+
+> [!WARNING]
+> If the app shows errors about a missing Anthropic key while your `.env` is correct, an old process may still be bound to port **8787**. Stop it, then restart:  
+> `lsof -ti :8787 | xargs kill`  
+> Then run `npm run dev:all` again from the `capstone` folder.
+
+---
+
+## Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Vite dev server only |
+| `npm run dev:server` | Express + etymology/chess API (`tsx server/server.ts`) |
+| `npm run dev:all` / `dev:fresh` | Vite + API together (kills stale listener on 8787 first) |
+| `npm run build` | `tsc -b` then production Vite build → `dist/` |
+| `npm run preview` | Preview production build |
+| `npm run lint` | ESLint |
+
+---
+
+## Project structure (overview)
+
+```text
+capstone/
+├── server/
+│   └── server.ts          # Express: /api/etymology, Stockfish proxy, etc.
+├── src/
+│   ├── App.tsx            # Shell: design system + frame + scene router
+│   ├── components/        # Intro, GameRouter, DialogueBox, …
+│   ├── context/           # GameStateProvider
+│   ├── designSystem/      # DesignSystemProvider, DSButton, tokens
+│   ├── features/          # EtymologyEngine, PiGraph, UnlawfulChessboard, …
+│   ├── gameSave/          # localStorage snapshot helpers
+│   ├── layout/            # AppFrame, SceneHost
+│   ├── scenes/            # SceneRouter, GameScene, SettingsScene
+│   └── styles/            # theme defaults
+├── public/
+└── package.json
+```
+
+---
+
+## Tech stack
+
+- **UI:** React 19, TypeScript, Vite 7
+- **3D (avatars / frames):** React Three Fiber, drei, three.js
+- **Motion:** GSAP (where used)
+- **Chess:** chess.js, Stockfish (via server / `stockfish` package where applicable)
+- **Server:** Express 5, `tsx`, `dotenv`; LLM calls via `fetch` to Anthropic or OpenAI
+
+---
+
+## Learn more
+
+- [Vite](https://vite.dev/)
+- [React](https://react.dev/)

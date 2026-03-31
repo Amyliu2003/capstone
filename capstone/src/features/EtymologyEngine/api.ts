@@ -49,6 +49,24 @@ function tryLegacyStringVariants(data: unknown): EtymologyResponse | null {
   }
 }
 
+/** Humpty-style rewrite of the player’s definition; used as a 4th quiz option. */
+export async function fetchParaphraseDefinition(text: string): Promise<string> {
+  const res = await fetch('/api/etymology/paraphrase', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!res.ok) {
+    const t = await res.text().catch(() => '')
+    throw new Error(t || `Paraphrase failed: ${res.status}`)
+  }
+  const data: unknown = await res.json()
+  if (!data || typeof data !== 'object' || typeof (data as { text?: unknown }).text !== 'string') {
+    throw new Error('Malformed paraphrase response')
+  }
+  return (data as { text: string }).text.trim()
+}
+
 export async function fetchEtymology(
   word: string,
   promptConfig?: EtymologyPromptConfig,
