@@ -82,6 +82,8 @@ This document summarizes what was implemented and refactored in the game (React 
 
 - **Exact resume:** Chess and Pi snapshots aim to restore in-phase state; transient UI (e.g. piece selection mid-animation) may reset on load.
 - **Etymology phase:** Save from etymology stores level/phase/history only (no separate “engine” snapshot unless extended later).
+- **WebGL context limit (UI previews):** Browser caps concurrent WebGL contexts (often ~8–16). Creating a `THREE.WebGLRenderer` per thumbnail (e.g. a grid of `ThreeFrame` previews) can trigger `WARNING: Too many active WebGL contexts` and `THREE.WebGLRenderer: Context Lost`.
+  - Fix: add `enabled` / `rotate` props to `ThreeFrame` and **disable WebGL** (`enabled={false}`) for grids/thumbnails; keep **one** WebGL preview (center panel) and optionally a single static avatar.
 
 ---
 
