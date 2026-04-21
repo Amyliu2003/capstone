@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { DialogueBox } from '../../components/DialogueBox'
 import { DSButton } from '../../designSystem/components/DSButton'
-import { fetchEtymology } from './api'
+import { fetchEtymology, fetchParaphraseDefinition } from './api'
 import { JABBERWOCKY } from './jabberwocky'
 import { buildMarkovModel, generateWord, type CorpusConfig } from './markov'
 import type { EtymologyVariant } from './types'
@@ -14,6 +15,8 @@ type EngineState =
 export type EtymologyEngineProps = {
   levelMode?: boolean
   levelWord?: string
+  /** Player’s definition (for H.D. echo after confirm in level mode). */
+  playerDefinition?: string
   /** Four or more LLM + distractor variants; pick one to complete. */
   variants?: EtymologyVariant[]
   onComplete?: (chosen: EtymologyVariant) => void
@@ -139,28 +142,78 @@ export function EtymologyQuizRadioList({ variants, selected, onSelect, onConfirm
 }
 
 export function EtymologyEngine(props: EtymologyEngineProps = {}) {
-  const { levelMode, levelWord, variants = [], onComplete } = props
+  const { levelMode, levelWord, playerDefinition: levelPlayerDefinition = '', variants = [], onComplete } = props
   const model = useMemo(() => buildMarkovModel(defaultCorpus, { order: 4 }), [])
   const [word, setWord] = useState('')
+  const [playerDefinition, setPlayerDefinition] = useState<string>('')
+  /** Humpty paraphrase of `playerDefinition` for the 4th option; empty if not yet run or failed. */
+  const [paraphrasedDefinition, setParaphrasedDefinition] = useState<string>('')
   const [state, setState] = useState<EngineState>({ status: 'idle' })
   const [selected, setSelected] = useState<number | null>(null)
+  /** Level mode: after Confirm, show H.D. echo then call onComplete. */
+  const [levelEcho, setLevelEcho] = useState<{ line: string; chosen: EtymologyVariant } | null>(null)
 
   const canGenerate = word.trim().length > 0 && state.status !== 'loading'
+
+  function playerFourthVariant(fourthText: string): EtymologyVariant {
+    return {
+      text: fourthText,
+      pattern: 'Player',
+      century: '',
+      origin_language: '',
+      citations: [],
+    }
+  }
 
   async function onGenerateEtymology() {
     if (!canGenerate) return
     const w = word.trim()
+    const pd = playerDefinition.trim()
     setState({ status: 'loading' })
+    setParaphrasedDefinition('')
     try {
-      const res = await fetchEtymology(w, {
-        tone: 'deadpan',
-        include: ['origin_language', 'century', 'semantic_shift', 'fake_citations'],
-      })
-      setState({ status: 'done', variants: res.variants })
+      const etymReq = fetchEtymology(
+        w,
+        {
+          tone: 'deadpan',
+          include: ['origin_language', 'century', 'semantic_shift', 'fake_citations'],
+        },
+        playerDefinition || undefined,
+      )
+      if (!pd) {
+        const res = await etymReq
+        setState({ status: 'done', variants: res.variants })
+        return
+      }
+      const [res, para] = await Promise.all([
+        etymReq,
+        fetchParaphraseDefinition(pd).catch(() => null as string | null),
+      ])
+      const paraOk = para != null && para.trim().length > 0 ? para.trim() : ''
+      setParaphrasedDefinition(paraOk)
+      const fourthText = paraOk || pd
+      setState({ status: 'done', variants: [...res.variants, playerFourthVariant(fourthText)] })
     } catch (e) {
       setState({ status: 'error', message: e instanceof Error ? e.message : 'Unknown error' })
     }
   }
+
+  useEffect(() => {
+    if (playerDefinition.trim()) {
+      void onGenerateEtymology()
+    }
+    // Intentionally only when the player’s definition changes (not on every render of onGenerateEtymology).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerDefinition])
+
+  useEffect(() => {
+    if (!levelEcho || !onComplete) return
+    const id = window.setTimeout(() => {
+      onComplete(levelEcho.chosen)
+      setLevelEcho(null)
+    }, 1500)
+    return () => window.clearTimeout(id)
+  }, [levelEcho, onComplete])
 
   function onGenerateNonsense() {
     const w = generateWord(model, { minLength: 4, maxLength: 12 })
@@ -169,6 +222,27 @@ export function EtymologyEngine(props: EtymologyEngineProps = {}) {
   }
 
   if (levelMode && levelWord !== undefined && variants.length >= 4 && onComplete) {
+    if (levelEcho) {
+      return (
+        <section
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+            height: '100%',
+            minHeight: 0,
+          }}
+        >
+          <DialogueBox
+            visible={true}
+            node={{ type: 'auto', npc: levelEcho.line }}
+            onAdvance={() => {}}
+            npcOnly
+          />
+        </section>
+      )
+    }
+
     return (
       <section
         style={{
@@ -192,7 +266,11 @@ export function EtymologyEngine(props: EtymologyEngineProps = {}) {
           onSelect={setSelected}
           onConfirm={() => {
             if (selected === null) return
-            onComplete(variants[selected]!)
+            const chosen = variants[selected]!
+            const echoLine = levelPlayerDefinition.trim()
+              ? `Just as you said — "${levelPlayerDefinition.trim()}." Very good.`
+              : `Very good.`
+            setLevelEcho({ line: echoLine, chosen })
           }}
         />
       </section>
@@ -200,7 +278,7 @@ export function EtymologyEngine(props: EtymologyEngineProps = {}) {
   }
 
   return (
-    <section style={{ display: 'grid', gap: 10 }}>
+    <section style={{ display: 'grid', gap: 10 }} data-paraphrased-definition={paraphrasedDefinition || undefined}>
       <header style={{ display: 'grid', gap: 4 }}>
         <h2 style={{ margin: 0 }}>Etymology Engine</h2>
         <div style={{ fontSize: 14, opacity: 0.8 }}>
@@ -217,6 +295,19 @@ export function EtymologyEngine(props: EtymologyEngineProps = {}) {
           style={{ padding: 8 }}
         />
       </label>
+
+      <DialogueBox
+        visible={true}
+        node={{
+          type: 'input',
+          npc: 'What does your word mean? Write a short definition.',
+          onSubmit: (text) => {
+            setPlayerDefinition(text)
+          },
+          disabled: state.status === 'loading',
+        }}
+        onAdvance={() => {}}
+      />
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" onClick={onGenerateNonsense} disabled={state.status === 'loading'}>

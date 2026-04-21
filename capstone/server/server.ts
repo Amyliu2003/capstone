@@ -40,6 +40,7 @@ console.log('[etymology server] LLM provider:', useOpenAI ? 'OpenAI' : 'Anthropi
 
 import { spawn } from 'child_process'
 import express, { type Request, type Response } from 'express'
+import RiveScript from 'rivescript'
 
 import { etymologyPatterns } from '../src/features/EtymologyEngine/etymology_patterns'
 
@@ -79,58 +80,37 @@ function retrieveExamples(word: string, k = 4): JabberwockySourceWord[] {
   return items.slice(0, Math.max(1, k))
 }
 
-function buildPrompt(word: string, promptConfig?: PromptConfig, playerDefinition?: string): string {
-  const tone = promptConfig?.tone ?? 'deadpan'
-  const include = new Set(promptConfig?.include ?? ['origin_language', 'century', 'semantic_shift', 'fake_citations'])
-
+function buildEtymologyPrompt(word: string, _promptConfig?: PromptConfig, playerDefinition?: string): string {
   const examples = retrieveExamples(word)
   const examplesBlock =
     examples.length === 0
       ? ''
       : [
-          'Here are example entries to imitate:',
+          'Examples of the ONLY acceptable style:',
           '',
-          ...examples.map((ex) =>
-            [
-              `Word: ${ex.word}`,
-              `Explanation: ${ex.humpty_explanation}`,
-              ex.pattern_type ? `Pattern: ${ex.pattern_type}` : '',
-            ]
-              .filter(Boolean)
-              .join('\n'),
-          ),
+          ...examples.map((ex) => `${ex.word}: ${ex.humpty_explanation}`),
           '',
         ].join('\n')
 
   const playerLine =
     playerDefinition
-      ? `The player described this word as: "${playerDefinition}". Incorporate this into the etymology.\n`
+      ? `The player described this word as: "${playerDefinition}". You MUST incorporate at least one word or short phrase from the player's input verbatim into one of the three variants — woven into the prose naturally, not quoted. Do not sanitize or replace their vocabulary.\n`
       : ''
 
-  const bullets: string[] = []
-  if (include.has('origin_language')) bullets.push('- Invent an origin language name and a plausible-sounding gloss.')
-  if (include.has('century')) bullets.push('- Give an approximate century/date range for earliest attestation.')
-  if (include.has('semantic_shift')) bullets.push('- Describe semantic drift across at least two stages.')
-  if (include.has('fake_citations')) bullets.push('- Include 1–2 clearly fictional citations (book/article style).')
+  const humptySystemPrompt =
+    "You are Humpty Dumpty. You explain words the way Carroll wrote you: one or two short declarative sentences, completely confident, slightly absurd, never academic. You do not write dictionary entries. You do not list origins, centuries, or semantic drift. You just say what the word means, as if it were obvious. Example: 'Brillig means four o'clock in the afternoon — the time when you begin broiling things for dinner.' Example: 'Slithy means lithe and slimy — two meanings packed into one word.' That is all."
 
   return [
-    etymologyPatterns.llm_system_prompt_context.prompt,
+    humptySystemPrompt,
     '',
     examplesBlock,
     playerLine,
     `Now write a clearly fictional etymology for the word: "${word}".`,
-    `Tone: ${tone}.`,
     '',
     'Constraints:',
-    '- Do NOT claim this is real history; keep it obviously playful but coherent.',
-    '- The three variants MUST have completely different meanings — different actions, different concepts, different semantic fields. Do NOT give the same definition three times with different etymologies. Each variant should feel like it comes from a different person who has never met the other two.',
-    '- BAD (do not do this): three variants that all define brillig as \'the act of grilling.\' GOOD: one defines it as a feeling, one as an action, one as a time or place.',
-    '- Put detail in `pattern`, `century`, `origin_language`, and `citations` — not inside `text`.',
-    '- Hard limit: `text` is ONE sentence, max 20 words.',
-    '- All string values must use only straight apostrophes (\') never double quotes inside the text. If you must include a double quote, escape it as \\" in JSON strings.',
-    '',
-    'Include:',
-    ...bullets,
+    '- ONE or TWO sentences maximum. If you write three sentences, you have failed.',
+    '- Concrete and physical — describe what a person does, feels, or experiences. Not abstract concepts.',
+    '- The three variants MUST have completely different meanings. Not the same idea with different words.',
     '',
     'Output format:',
     'Return ONLY this JSON, no other text:',
@@ -368,8 +348,114 @@ async function generateEtymology(prompt: string): Promise<string> {
   return anthropicMessages(prompt)
 }
 
+function buildParaphrasePrompt(text: string): string {
+  const safe = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+  return `Rewrite the following in the style of Humpty Dumpty — one short confident sentence, concrete and physical, no academic language. Keep the core meaning. Input: '${safe}'`
+}
+
 const app = express()
 app.use(express.json({ limit: '100kb' }))
+
+type DialogueGameState = { level: number; phase: string; word?: string }
+
+const dialogueBot = new RiveScript()
+const dialogueRivePath = path.join(__dirname, 'dialogue.rive')
+const dialogueBotReady = dialogueBot.loadFile(dialogueRivePath).then(() => {
+  dialogueBot.sortReplies()
+})
+
+function buildDialogueSystemPrompt(word?: string): string {
+  const w = (word ?? '').trim()
+  const wordClause = w ? `current word '${w}'` : `current word ''`
+  return (
+    "You are Humpty Dumpty. The player is talking to you during a word puzzle game.\n" +
+    'Respond in 1-2 short sentences only. Stay in character: confident, slightly\n' +
+    'obtuse, never helpful in a direct way, never break the fourth wall.\n' +
+    `If they mention the ${wordClause}, you may reference it obliquely.\n` +
+    'Never say you are an AI. Never explain the game. Never apologize.'
+  )
+}
+
+async function callLlmForDialogue(message: string, gameState: DialogueGameState): Promise<string> {
+  const sys = buildDialogueSystemPrompt(gameState.word)
+  const prompt = `${sys}\n\nPlayer: ${message}\nHumpty Dumpty:`
+  return generateEtymology(prompt)
+}
+
+async function getDialogueResponse(
+  message: string,
+  gameState: DialogueGameState,
+): Promise<{ response: string; source: 'rivescript' | 'llm' }> {
+  await dialogueBotReady
+  const rsReply = await dialogueBot.replyAsync('localuser', message)
+  const isDefaultFallback =
+    rsReply.includes('explain all the poems') || rsReply === 'ERR: No Reply Matched'
+
+  if (!isDefaultFallback) {
+    return { response: rsReply, source: 'rivescript' }
+  }
+
+  const llmResponse = await callLlmForDialogue(message, gameState)
+  return { response: llmResponse.trim(), source: 'llm' }
+}
+
+app.post('/api/dialogue', async (req: Request, res: Response) => {
+  const rawMessage = req.body?.message
+  const rawGameState = req.body?.gameState
+  if (typeof rawMessage !== 'string' || rawMessage.trim().length === 0) {
+    res.status(400).send('Missing "message"')
+    return
+  }
+  if (!rawGameState || typeof rawGameState !== 'object') {
+    res.status(400).send('Missing "gameState"')
+    return
+  }
+  const gs = rawGameState as Record<string, unknown>
+  const level = typeof gs.level === 'number' ? gs.level : Number(gs.level)
+  const phase = typeof gs.phase === 'string' ? gs.phase : String(gs.phase ?? '')
+  const word = typeof gs.word === 'string' ? gs.word : undefined
+  if (!Number.isFinite(level) || !phase) {
+    res.status(400).send('Malformed "gameState"')
+    return
+  }
+
+  try {
+    const out = await getDialogueResponse(rawMessage.trim(), { level, phase, word })
+    res.json(out)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Server error'
+    if (msg.includes('ANTHROPIC_API_KEY') || msg.includes('Missing ANTHROPIC')) {
+      res.status(500).send(
+        'An old server without your .env is still running. Stop it: run "lsof -ti :8787 | xargs kill" in a terminal, then from the capstone app folder run "npm run dev:fresh". To use OpenAI instead, add OPENAI_API_KEY and LLM_PROVIDER=openai to .env.'
+      )
+      return
+    }
+    res.status(500).send(msg)
+  }
+})
+
+app.post('/api/etymology/paraphrase', async (req: Request, res: Response) => {
+  const raw = req.body?.text
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    res.status(400).json({ error: 'Missing "text"' })
+    return
+  }
+  const text = raw.trim()
+  try {
+    const prompt = buildParaphrasePrompt(text)
+    const rewritten = await generateEtymology(prompt)
+    res.json({ text: rewritten.trim() })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Server error'
+    if (msg.includes('ANTHROPIC_API_KEY') || msg.includes('Missing ANTHROPIC')) {
+      res.status(500).send(
+        'An old server without your .env is still running. Stop it: run "lsof -ti :8787 | xargs kill" in a terminal, then from the capstone app folder run "npm run dev:fresh". To use OpenAI instead, add OPENAI_API_KEY and LLM_PROVIDER=openai to .env.',
+      )
+      return
+    }
+    res.status(500).send(msg)
+  }
+})
 
 app.post('/api/etymology', async (req: Request, res: Response) => {
   const word = req.body?.word
@@ -385,7 +471,7 @@ app.post('/api/etymology', async (req: Request, res: Response) => {
 
   try {
     const trimmedWord = word.trim()
-    const prompt = buildPrompt(trimmedWord, promptConfig, playerDefinition)
+    const prompt = buildEtymologyPrompt(trimmedWord, promptConfig, playerDefinition)
     const story = await generateEtymology(prompt)
     const variants = parseVariantsFromLlmText(story, trimmedWord)
     // eslint-disable-next-line no-console

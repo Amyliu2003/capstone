@@ -427,10 +427,6 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
             Complete puzzle &amp; continue
           </button>
         )}
-        <span style={{ fontSize: 14, opacity: 0.85 }}>
-          Click a piece, then a square to move. Click the same piece again or another of your pieces
-          to change selection. Only the side to move can select pieces.
-        </span>
         <span style={{ fontSize: 14, fontWeight: 600 }}>
           {currentTurn === 'w' ? 'White' : 'Black'} to move
         </span>

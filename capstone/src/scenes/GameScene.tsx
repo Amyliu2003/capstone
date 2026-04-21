@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GameRouter } from '../components/GameRouter'
 import { DialogueBox, type DialogueNode } from '../components/DialogueBox'
-import { useGameState } from '../context/GameState'
+import { DialogueSequence, type DialogueLine } from '../components/DialogueSequence'
+import { useGameState, type EtymologyResult } from '../context/GameState'
 import { DSButton } from '../designSystem/components/DSButton'
 import { fetchEtymology, type EtymologyPromptConfig } from '../features/EtymologyEngine/api'
 import { EtymologyQuizRadioList } from '../features/EtymologyEngine/EtymologyEngine'
@@ -55,6 +56,8 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
     loadGameSnapshot,
     restartLevelToIntro,
     runSeed,
+    hasSeenEtymologyIntro,
+    markEtymologyIntroSeen,
   } = useGameState()
 
   const chessRef = useRef<UnlawfulChessboardHandle | null>(null)
@@ -63,6 +66,12 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
   const [etymologyFetching, setEtymologyFetching] = useState(false)
   const [etymologyChoose, setEtymologyChoose] = useState<EtymologyChooseState | null>(null)
   const [etymologySelection, setEtymologySelection] = useState<number | null>(null)
+  const [preEtymologyIntroOpen, setPreEtymologyIntroOpen] = useState(false)
+  const [definitionConfirmSeqOpen, setDefinitionConfirmSeqOpen] = useState(false)
+  const pendingEtymologyResultRef = useRef<EtymologyResult | null>(null)
+  const [dialogueOpen, setDialogueOpen] = useState(true)
+  const [dialogueFetching, setDialogueFetching] = useState(false)
+  const [dialogueHdLine, setDialogueHdLine] = useState<string | null>(null)
 
   useEffect(() => {
     setEtymologyChoose(null)
@@ -78,6 +87,57 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
       setEtymologyFetching(false)
     }
   }, [currentPhase])
+
+  useEffect(() => {
+    // Default: keep dialogue open outside the etymology prompt, so the player can always ask H.D.
+    if (currentPhase !== 'etymology') {
+      setDialogueOpen(true)
+    }
+  }, [currentPhase])
+
+  useEffect(() => {
+    if (page !== 'game') return
+    if (currentLevel !== 1) return
+    if (currentPhase !== 'etymology') return
+    if (hasSeenEtymologyIntro) return
+    setPreEtymologyIntroOpen(true)
+  }, [page, currentLevel, currentPhase, hasSeenEtymologyIntro])
+
+  const seq3 = useMemo<DialogueLine[]>(
+    () => [{ speaker: 'H.D.', text: "What does this word mean? You're the expert. You hallucinate, I'll translate." }],
+    [],
+  )
+  const seq4 = useMemo<DialogueLine[]>(() => [{ speaker: 'H.D.', text: 'Very good. Very you.' }], [])
+
+  const handleDialogueSubmit = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim()
+      if (!trimmed) return
+      setDialogueFetching(true)
+      try {
+        const res = await fetch('/api/dialogue', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            message: trimmed,
+            gameState: { level: currentLevel, phase: currentPhase, word: levelConfig?.word },
+          }),
+        })
+        if (!res.ok) {
+          const msg = await res.text()
+          throw new Error(msg || 'Dialogue request failed.')
+        }
+        const data = (await res.json()) as { response?: unknown }
+        const response = typeof data.response === 'string' ? data.response.trim() : ''
+        setDialogueHdLine(response || '…')
+      } catch (e) {
+        setDialogueHdLine(e instanceof Error ? e.message : 'Dialogue request failed.')
+      } finally {
+        setDialogueFetching(false)
+      }
+    },
+    [currentLevel, currentPhase, levelConfig?.word],
+  )
 
   const handleEtymologySubmit = useCallback(
     async (text: string) => {
@@ -113,13 +173,16 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
   const handleEtymologyConfirm = useCallback(() => {
     if (!etymologyChoose || etymologySelection === null) return
     const i = etymologySelection
-    advancePhase({
+    const result: EtymologyResult = {
       playerDefinition: etymologyChoose.playerDefinition,
       chosenVariantIndex: i,
       isCanonical: etymologyChoose.options[i] === etymologyChoose.canonicalVariant,
-    })
+    }
+    pendingEtymologyResultRef.current = result
+    setDefinitionConfirmSeqOpen(true)
     setEtymologyChoose(null)
-  }, [etymologyChoose, etymologySelection, advancePhase])
+    setEtymologySelection(null)
+  }, [etymologyChoose, etymologySelection])
 
   /** Top H.D. strip: question only (fixed). */
   const topDialogueNode = useMemo<DialogueNode | null>(() => {
@@ -137,6 +200,12 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
         disabled: etymologyFetching,
       }
     }
+    if (dialogueFetching) {
+      return { type: 'loading', npc: '…' }
+    }
+    if (dialogueHdLine) {
+      return { type: 'auto', npc: dialogueHdLine }
+    }
     if (currentPhase === 'chess') {
       return { type: 'auto', npc: 'Complete the puzzle above.' }
     }
@@ -144,11 +213,12 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
       return { type: 'auto', npc: 'Continue when ready.' }
     }
     return { type: 'auto', npc: '—' }
-  }, [currentPhase, levelConfig, handleEtymologySubmit, etymologyFetching, etymologyChoose])
+  }, [currentPhase, levelConfig, handleEtymologySubmit, etymologyFetching, etymologyChoose, dialogueFetching, dialogueHdLine])
 
   /** Bottom strip: input / loading (fixed). During etymology choose, Confirm lives in {@link EtymologyQuizRadioList}. */
   const bottomDialogueNode = useMemo<DialogueNode | null>(() => {
     if (currentPhase === 'etymology' && levelConfig) {
+      if (preEtymologyIntroOpen || definitionConfirmSeqOpen) return null
       if (etymologyFetching) {
         return { type: 'loading', npc: 'Tokenizing your input...' }
       }
@@ -162,14 +232,25 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
         disabled: etymologyFetching,
       }
     }
-    if (currentPhase === 'chess') {
-      return { type: 'auto', npc: 'Complete the puzzle above.' }
+    if (!dialogueOpen) return null
+    return {
+      type: 'input',
+      npc: 'Ask H.D.',
+      onSubmit: handleDialogueSubmit,
+      disabled: dialogueFetching,
     }
-    if (currentPhase === 'pi') {
-      return { type: 'auto', npc: 'Continue when ready.' }
-    }
-    return { type: 'auto', npc: '—' }
-  }, [currentPhase, levelConfig, handleEtymologySubmit, etymologyFetching, etymologyChoose])
+  }, [
+    currentPhase,
+    levelConfig,
+    handleEtymologySubmit,
+    etymologyFetching,
+    etymologyChoose,
+    preEtymologyIntroOpen,
+    definitionConfirmSeqOpen,
+    dialogueOpen,
+    handleDialogueSubmit,
+    dialogueFetching,
+  ])
 
   return (
     <div
@@ -205,12 +286,17 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
         <span style={{ fontSize: 14, opacity: 0.85 }}>
           Phase: {currentPhase === 'etymology' ? 'Etymology' : currentPhase === 'chess' ? 'Chess' : 'Pi Graph'}
         </span>
+        {currentPhase !== 'etymology' && (
+          <DSButton type="button" onClick={() => setDialogueOpen((v) => !v)}>
+            {dialogueOpen ? 'Hide dialogue' : 'Ask H.D.'}
+          </DSButton>
+        )}
         <DSButton type="button" onClick={() => setPage('settings')}>
           Settings
         </DSButton>
       </header>
 
-      {page === 'game' && etymologyChoose && currentPhase === 'etymology' && (
+      {page === 'game' && etymologyChoose && currentPhase === 'etymology' && !definitionConfirmSeqOpen && (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <EtymologyQuizRadioList
             variants={etymologyChoose.options}
@@ -272,6 +358,28 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
         <div style={{ flexShrink: 0 }}>
           <DialogueBox visible={true} node={bottomDialogueNode} onAdvance={() => {}} />
         </div>
+      )}
+
+      {page === 'game' && preEtymologyIntroOpen && (
+        <DialogueSequence
+          lines={seq3}
+          onDone={() => {
+            markEtymologyIntroSeen()
+            setPreEtymologyIntroOpen(false)
+          }}
+        />
+      )}
+
+      {page === 'game' && definitionConfirmSeqOpen && (
+        <DialogueSequence
+          lines={seq4}
+          onDone={() => {
+            setDefinitionConfirmSeqOpen(false)
+            const r = pendingEtymologyResultRef.current
+            pendingEtymologyResultRef.current = null
+            if (r) advancePhase(r)
+          }}
+        />
       )}
     </div>
   )

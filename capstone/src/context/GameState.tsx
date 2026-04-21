@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { LEVEL_CONFIG, type LevelConfig } from '../config/levels'
 import type { ChessSnapshot, GameSnapshotV1, PiGraphSnapshot } from '../gameSave/gameStorage'
+import type { AgentParams } from '../components/HandCustomizationOverlay'
 
 export type GamePhase = 'etymology' | 'chess' | 'pi'
 
@@ -21,9 +22,14 @@ export type GameStateValue = {
   levelHistory: LevelHistoryEntry[]
   levelConfig: LevelConfig | null
   runSeed: number
+  agentParams: AgentParams
+  /** Level-1-only intro line before the first etymology input. */
+  hasSeenEtymologyIntro: boolean
   initialChessSnapshot: ChessSnapshot | null
   initialPiSnapshot: PiGraphSnapshot | null
   advancePhase: (result: EtymologyResult | ChessResult | PiResult) => void
+  setAgentParams: (next: AgentParams) => void
+  markEtymologyIntroSeen: () => void
   loadGameSnapshot: (snapshot: GameSnapshotV1) => void
   restartLevelToIntro: () => void
   resetGame: () => void
@@ -50,6 +56,8 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
   const [currentPhase, setCurrentPhase] = useState<GamePhase>(initialState.currentPhase)
   const [levelHistory, setLevelHistory] = useState<LevelHistoryEntry[]>([])
   const [runSeed, setRunSeed] = useState(0)
+  const [agentParams, setAgentParams] = useState<AgentParams>({ color: 'ivory', size: 'medium', accessory: 'none' })
+  const [hasSeenEtymologyIntro, setHasSeenEtymologyIntro] = useState(false)
   const [initialChessSnapshot, setInitialChessSnapshot] = useState<ChessSnapshot | null>(null)
   const [initialPiSnapshot, setInitialPiSnapshot] = useState<PiGraphSnapshot | null>(null)
 
@@ -103,6 +111,10 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
     setRunSeed((s) => s + 1)
   }, [])
 
+  const markEtymologyIntroSeen = useCallback(() => {
+    setHasSeenEtymologyIntro(true)
+  }, [])
+
   const restartLevelToIntro = useCallback(() => {
     setCurrentPhase('etymology')
     setLevelHistory((prev) => {
@@ -122,6 +134,8 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
     setLevelHistory([])
     setInitialChessSnapshot(null)
     setInitialPiSnapshot(null)
+    setAgentParams({ color: 'ivory', size: 'medium', accessory: 'none' })
+    setHasSeenEtymologyIntro(false)
     setRunSeed((s) => s + 1)
   }, [])
 
@@ -132,9 +146,13 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
       levelHistory,
       levelConfig,
       runSeed,
+      agentParams,
+      hasSeenEtymologyIntro,
       initialChessSnapshot,
       initialPiSnapshot,
       advancePhase,
+      setAgentParams,
+      markEtymologyIntroSeen,
       loadGameSnapshot,
       restartLevelToIntro,
       resetGame,
@@ -145,9 +163,13 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
       levelHistory,
       levelConfig,
       runSeed,
+      agentParams,
+      hasSeenEtymologyIntro,
       initialChessSnapshot,
       initialPiSnapshot,
       advancePhase,
+      setAgentParams,
+      markEtymologyIntroSeen,
       loadGameSnapshot,
       restartLevelToIntro,
       resetGame,

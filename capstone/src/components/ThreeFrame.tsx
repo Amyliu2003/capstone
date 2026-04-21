@@ -1,10 +1,22 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
-export function ThreeFrame({ width = 100, height = 100 }: { width?: number; height?: number }) {
+export function ThreeFrame({
+  width = 100,
+  height = 100,
+  rotate = true,
+  enabled = true,
+}: {
+  width?: number
+  height?: number
+  rotate?: boolean
+  /** When false, renders a non-WebGL placeholder (prevents context spam). */
+  enabled?: boolean
+}) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (!enabled) return
     const container = containerRef.current
     if (!container) return
 
@@ -34,7 +46,7 @@ export function ThreeFrame({ width = 100, height = 100 }: { width?: number; heig
     let raf = 0
     const animate = () => {
       raf = requestAnimationFrame(animate)
-      mesh.rotation.y += 0.01
+      if (rotate) mesh.rotation.y += 0.01
       renderer.render(scene, camera)
     }
     animate()
@@ -48,12 +60,20 @@ export function ThreeFrame({ width = 100, height = 100 }: { width?: number; heig
         container.removeChild(renderer.domElement)
       }
     }
-  }, [width, height])
+  }, [enabled, rotate, width, height])
 
   return (
     <div
       ref={containerRef}
-      style={{ width, height, flexShrink: 0, background: '#111' }}
+      style={{
+        width,
+        height,
+        flexShrink: 0,
+        background: enabled
+          ? '#111'
+          : 'radial-gradient(120% 120% at 30% 20%, rgba(255,255,255,0.14), rgba(0,0,0,0.55))',
+        border: '1px solid rgba(255,255,255,0.12)',
+      }}
       aria-hidden
     />
   )
