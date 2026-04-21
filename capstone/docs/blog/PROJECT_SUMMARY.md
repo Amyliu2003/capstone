@@ -14,7 +14,9 @@ This document summarizes what was implemented and refactored in the game (React 
 
 ## Intro scene
 
-- Low-fi intro: minimal copy + a centered **Done** button (design-system `DSButton`).
+- **3D garden (`IntroScene3D`):** Three.js scene with HDRI / grounded skybox (`/garden.exr`), ground fog, FPS-style **left-hand** rig from `fps-hands.glb`, and a **mirror** from `mirror.glb` (reflective surface + stencil-driven “suck” animation). WASD moves the camera on XZ with a minimum eye height above the floor.
+- **Loading overlay (`LoadingGraph`):** Full-screen SVG “complete graph” dissolve + **Still Running…** hold while GLBs / env maps load; calls `onComplete` when assets are ready so the 3D scene does not flash uninitialized.
+- **Narrative flow (`IntroScene`):** Staged state machine — mirror interaction triggers dialogue (`DialogueSequence`: llorrac / **H.D.** lines), then **`HandCustomizationOverlay`** (agent parameters stored in `GameState`), follow-up lines, second mirror sequence, and finally `onStart` into the main game. No separate **Done** button; progression is dialogue- and stage-driven.
 - Uses `SceneHost` for consistent full-height, non-scrolling layout.
 
 ---
@@ -70,7 +72,8 @@ This document summarizes what was implemented and refactored in the game (React 
 | Entry & shell | `src/App.tsx`, `src/main.tsx`, `src/index.css` |
 | Design system | `src/designSystem/DesignSystemProvider.tsx`, `src/designSystem/components/DSButton.tsx`, `src/styles/theme.ts` |
 | Layout | `src/layout/AppFrame.tsx`, `src/layout/SceneHost.tsx` |
-| Scenes | `src/scenes/SceneRouter.tsx`, `src/scenes/GameScene.tsx`, `src/scenes/SettingsScene.tsx`, `src/components/IntroScene.tsx` |
+| Scenes | `src/scenes/SceneRouter.tsx`, `src/scenes/GameScene.tsx`, `src/scenes/SettingsScene.tsx`, `src/components/IntroScene.tsx`, `src/components/DialogueSequence.tsx`, `src/components/HandCustomizationOverlay.tsx` |
+| Intro 3D | `src/features/Intro/IntroScene3D.tsx`, `src/features/Intro/LoadingGraph.tsx`, `src/features/Hand/fpsHandModel.ts` |
 | Game flow | `src/context/GameState.tsx`, `src/components/GameRouter.tsx` |
 | Pi graph | `src/features/PiGraph/PiGraph.tsx`, `PiGraphCanvas.tsx`, `piDigits.ts` |
 | Chess | `src/features/UnlawfulChessboard/UnlawfulChessboard.tsx` |

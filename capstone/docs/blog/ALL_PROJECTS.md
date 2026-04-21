@@ -7,7 +7,7 @@
 ## Non-negotiables
 
 - **Verbatim / fixed language**: Project identity phrases and thesis lines agreed for the build should stay verbatim where specified (including bilingual ecilA framing where it appears in copy).
-- **Source fidelity for Humpty**: Dialogue and definitions should align with Carroll’s Humpty Dumpty passages where the design calls for direct fidelity; `THROUGH_THE_LOOKING_GLASS.md` is the in-repo text archive for reference.
+- **Source fidelity for Humpty**: Dialogue and definitions should align with Carroll’s Humpty Dumpty passages where the design calls for direct fidelity; [THROUGH_THE_LOOKING_GLASS.md](THROUGH_THE_LOOKING_GLASS.md) in this folder is the in-repo text archive for reference.
 - **Tonal guardrails**: The critique of utilitarian “optimization” of language should remain legible in mechanics and copy, not only in README text.
 
 ---
@@ -36,7 +36,7 @@ Player-facing goal: watch π digit transitions accumulate as edges and unlock wi
 | **Dialogue pipeline** | RiveScript → LLM chat loop for Humpty | **`POST /api/dialogue`** in `server/server.ts`: RiveScript (`dialogue.rive`) with LLM fallback; expects `message` + `gameState` | **`DialogueBox` has no `fetch` to `/api/dialogue`**. GameScene wires dialogue UI to **etymology** (`fetchEtymology` / `api.ts`), not the chat endpoint. **Server ready; client wiring pending** for full chat loop. |
 | **Etymology API** | Player definitions feeding variants / paraphrase | **`POST /api/etymology`**, **`POST /api/etymology/paraphrase`**; client uses etymology flow from `GameScene` + `EtymologyEngine` | Extend prompts / level-specific config as narrative requires; already integrated for core loop. |
 | **Persistence** | Shared persistent π graph, cross-session “agent” identity (in fuller spec) | **Single-slot `localStorage`** (`capstone.gameSnapshot.v1`): level, phase, `levelHistory`, optional chess/pi snapshots | **No shared server-side graph**; no `playerWords[]` / multi-agent numbering in schema. **Phase-2** if required by narrative. |
-| **Hands / mouth** | Live2D or similar 2D rig in some production tiers | **Three.js** `HandLayer` + `fps-hands.glb` on `IntroScene` | Tier: **Show & Tell** = current 3D/GSAP-capable path; **Live2D** = separate pipeline if pursued later. |
+| **Hands / mouth** | Live2D or similar 2D rig in some production tiers | **Three.js** `IntroScene3D`: `fps-hands.glb`, `mirror.glb`, HDRI + `LoadingGraph` overlay; dialogue + `HandCustomizationOverlay` in `IntroScene` | Tier: **Show & Tell** = current 3D path; **Live2D** = separate pipeline if pursued later. |
 | **Unified flow** | Older notes: “three modules as separate tabs” | **Single `GameScene`**: phases **etymology → chess → pi** with `DialogueBox` (split top/bottom: NPC-only + interactive) | Episode 0–8 structure and gallery are **content/routing** work on top of this spine. |
 
 ---
@@ -45,8 +45,8 @@ Player-facing goal: watch π digit transitions accumulate as edges and unlock wi
 
 | Milestone | Target | Status |
 |-----------|--------|--------|
-| Show & Tell demo | ~**Mar 31, 2026** | Planned |
-| Paper — Results / Evaluation draft pressure | ~**Apr 7, 2026** | Planned |
+| Show & Tell demo | ~**Mar 31, 2026** | Past target (confirm shipped vs deferred) |
+| Paper — Results / Evaluation draft pressure | ~**Apr 7, 2026** | Past target (confirm draft status) |
 | Thesis / final deliverables week | Late Spring 2026 (per program) | Planned |
 
 **Scheduling note:** The **demo vs writing** squeeze between Show & Tell and the paper is real. Use a **two-track weekly plan**: one track ships a vertical slice in the build; the other maintains a **Results / Evaluation** skeleton fed by what the build actually does.
@@ -57,7 +57,7 @@ Player-facing goal: watch π digit transitions accumulate as edges and unlock wi
 
 These are credible minimums for a slice demo; adjust to match program wording.
 
-- [ ] **Episode 0–style intro playable**: intro scene → enter game (existing `IntroScene` / `SceneRouter` flow).
+- [ ] **Episode 0–style intro playable**: 3D intro (`IntroScene3D`, `LoadingGraph`) → scripted dialogue and hand customization → enter game (`IntroScene` / `SceneRouter`).
 - [ ] **One full level loop**: etymology → chess → pi completes for at least one level with stable save/load if demo requires resume.
 - [ ] **H.D. voice visible**: NPC copy path live (e.g. top `DialogueBox` `npcOnly` line or equivalent) with project tone.
 - [ ] **Contamination legible**: a player definition choice affects downstream phase (chess and/or pi) in a way the player can describe in one sentence.
@@ -81,10 +81,11 @@ These are credible minimums for a slice demo; adjust to match program wording.
 
 | Concern | Location |
 |---------|----------|
+| Intro (3D + loading + customization) | `src/components/IntroScene.tsx`, `src/features/Intro/IntroScene3D.tsx`, `src/features/Intro/LoadingGraph.tsx` |
 | Phase machine | `src/context/GameState.tsx` |
 | Main game UI | `src/scenes/GameScene.tsx` |
 | Dialogue presentation | `src/components/DialogueBox.tsx` |
 | Pi (canvas) | `src/features/PiGraph/PiGraph.tsx`, `PiGraphCanvas.tsx` |
 | Etymology client API | `src/features/EtymologyEngine/api.ts` |
 | Dialogue + etymology + chess APIs | `server/server.ts` |
-| Save format | `src/gameSave/gameStorage.ts`, `PROJECT_SUMMARY.md` |
+| Save format | `src/gameSave/gameStorage.ts`, [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) (this folder) |

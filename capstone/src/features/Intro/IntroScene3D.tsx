@@ -14,9 +14,11 @@ import {
   FloatType,
   Fog,
   Group,
-  Matrix4,
   Mesh,
   MeshBasicMaterial,
+  CanvasTexture,
+  LinearFilter,
+  MeshStandardMaterial,
   MeshToonMaterial,
   PerspectiveCamera,
   Plane,
@@ -47,6 +49,7 @@ import {
   fitFpsHandRoot,
   hideOppositeHand,
 } from '../Hand/fpsHandModel'
+import { LoadingGraph } from './LoadingGraph'
 
 /**
  * Intro: HDRI / ground + `mirror.glb`, FPS hand from `fps-hands.glb`.
@@ -155,6 +158,49 @@ const ENABLE_MIRROR_CLICK_ALERT = false
 
 /** Hide debug HUD overlays (raycast + camera live box). */
 const SHOW_INTRO_CAMERA_UI = false
+
+const JABBERWOCKY_STANZAS_1_2 = `'Twas brillig, and the slithy toves
+  Did gyre and gimble in the wabe;
+All mimsy were the borogoves,
+  And the mome raths outgrabe.
+
+"Beware the Jabberwock, my son!
+  The jaws that bite, the claws that catch!
+Beware the Jubjub bird, and shun
+  The frumious Bandersnatch!"`
+
+function makeJabberwockyEngravingTexture(): HTMLCanvasElement {
+  const c = document.createElement('canvas')
+  c.width = 1024
+  c.height = 1024
+  const ctx = c.getContext('2d')
+  if (!ctx) return c
+
+  ctx.clearRect(0, 0, c.width, c.height)
+  // Keep the alpha map crisp: any blur creates a “haze” across the whole mirror plane.
+  ctx.globalAlpha = 1
+  ctx.shadowBlur = 0
+  ctx.shadowColor = 'rgba(0,0,0,0)'
+  ctx.translate(c.width / 2, c.height / 2)
+  ctx.scale(-1, 1) // mirrored / illegible
+  ctx.translate(-c.width / 2, -c.height / 2)
+
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = 'rgba(255,255,255,1)'
+
+  const lines = JABBERWOCKY_STANZAS_1_2.split('\n')
+  const fontSize = 44
+  ctx.font = `${fontSize}px "IM Fell English", "I.M. Fell English", Georgia, serif`
+
+  const startY = c.height / 2 - ((lines.length - 1) * (fontSize * 1.15)) / 2
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? ''
+    ctx.fillText(line, c.width / 2, startY + i * fontSize * 1.15)
+  }
+
+  return c
+}
 
 /** GLB mesh name for the mirror glass (separate export); frame stays as `tripo_part_11`. */
 const MIRROR_GLASS_MESH_NAME = 'tripo_part_9'
@@ -387,6 +433,9 @@ export function IntroScene3D({
   const [raycastDebug, setRaycastDebug] = useState('')
   const [cameraLogLines, setCameraLogLines] = useState<{ id: number; text: string }[]>([])
   const cameraLogIdRef = useRef(0)
+  /** HDRI + mirror GLB + hand GLB finished loading (does not control overlay timing by itself). */
+  const [hdriGlbReady, setHdriGlbReady] = useState(false)
+  const [loadOverlayDismissed, setLoadOverlayDismissed] = useState(false)
 
   useEffect(() => {
     mirrorAlertRef.current = mirrorAlertMessage
@@ -406,11 +455,18 @@ export function IntroScene3D({
     mirrorSuckRequestIdRef.current = mirrorSuckRequestId
   }, [mirrorSuckRequestId])
 
+  // Starts faintly visible (storyboard: text exists, becomes legible as you approach).
+  const jabberwockyOpacityRef = useRef(0.5)
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
     let cancelled = false
+    queueMicrotask(() => {
+      setHdriGlbReady(false)
+      setLoadOverlayDismissed(false)
+    })
     const scene = new Scene()
     scene.fog = new Fog(GRASS, 14, 48)
 
@@ -450,55 +506,71 @@ export function IntroScene3D({
     let groundedSkybox: GroundedSkybox | null = null
     let envEquirectTex: Texture | null = null
 
-    const tryLoadEnvMap = (index: number) => {
-      if (!pmrem || cancelled || index >= environmentMapUrls.length) return
-      const url = environmentMapUrls[index]
-      loadEquirectTexture(
-        url,
-        (tex) => {
-          if (cancelled) {
-            tex.dispose()
-            return
-          }
-          tex.mapping = EquirectangularReflectionMapping
-          envTarget = pmrem!.fromEquirectangular(tex)
-          const envMap = envTarget.texture
-          scene.environment = envMap
-          // Fills any gap / confirms EXR+PMREM; avoids “only clearColor” if sky mesh misses pixels.
-          scene.background = envMap
-          scene.backgroundRotation.y = HDRI_ROTATION_Y
-          scene.environmentRotation.y = HDRI_ROTATION_Y
-
-          const skybox = new GroundedSkybox(
-            tex,
-            GROUNDED_SKYBOX_HEIGHT,
-            GROUNDED_SKYBOX_RADIUS,
-            GROUNDED_SKYBOX_RESOLUTION,
-          )
-          skybox.rotation.y = HDRI_ROTATION_Y
-          // Official helper: put projected ground through world origin (three.js GroundedSkybox.js)
-          skybox.position.y = GROUNDED_SKYBOX_HEIGHT + FLOOR_WORLD_Y
-          const skyMat = skybox.material as MeshBasicMaterial
-          // Camera sits *inside* the sphere: FrontSide culls the interior → only clearColor showed.
-          skyMat.side = BackSide
-          skyMat.fog = false
-          scene.add(skybox)
-          groundedSkybox = skybox
-          envEquirectTex = tex
-        },
-        (err) => {
-          if (cancelled) return
-          console.warn('[IntroScene3D] env map failed:', url, err)
-          tryLoadEnvMap(index + 1)
-        },
-      )
-    }
-
-    if (ENABLE_HDR_ENV) {
+    const envMapPromise = new Promise<void>((resolve) => {
+      if (!ENABLE_HDR_ENV) {
+        resolve()
+        return
+      }
       pmrem = new PMREMGenerator(renderer)
       pmrem.compileEquirectangularShader()
+
+      const tryLoadEnvMap = (index: number) => {
+        if (cancelled || index >= environmentMapUrls.length) {
+          resolve()
+          return
+        }
+        if (!pmrem) {
+          resolve()
+          return
+        }
+        const url = environmentMapUrls[index]
+        loadEquirectTexture(
+          url,
+          (tex) => {
+            if (cancelled) {
+              tex.dispose()
+              resolve()
+              return
+            }
+            tex.mapping = EquirectangularReflectionMapping
+            envTarget = pmrem!.fromEquirectangular(tex)
+            const envMap = envTarget.texture
+            scene.environment = envMap
+            // Fills any gap / confirms EXR+PMREM; avoids “only clearColor” if sky mesh misses pixels.
+            scene.background = envMap
+            scene.backgroundRotation.y = HDRI_ROTATION_Y
+            scene.environmentRotation.y = HDRI_ROTATION_Y
+
+            const skybox = new GroundedSkybox(
+              tex,
+              GROUNDED_SKYBOX_HEIGHT,
+              GROUNDED_SKYBOX_RADIUS,
+              GROUNDED_SKYBOX_RESOLUTION,
+            )
+            skybox.rotation.y = HDRI_ROTATION_Y
+            // Official helper: put projected ground through world origin (three.js GroundedSkybox.js)
+            skybox.position.y = GROUNDED_SKYBOX_HEIGHT + FLOOR_WORLD_Y
+            const skyMat = skybox.material as MeshBasicMaterial
+            // Camera sits *inside* the sphere: FrontSide culls the interior → only clearColor showed.
+            skyMat.side = BackSide
+            skyMat.fog = false
+            scene.add(skybox)
+            groundedSkybox = skybox
+            envEquirectTex = tex
+            resolve()
+          },
+          (err) => {
+            if (cancelled) {
+              resolve()
+              return
+            }
+            console.warn('[IntroScene3D] env map failed:', url, err)
+            tryLoadEnvMap(index + 1)
+          },
+        )
+      }
       tryLoadEnvMap(0)
-    }
+    })
 
     const ground = new Mesh(
       new PlaneGeometry(80, 80),
@@ -518,19 +590,19 @@ export function IntroScene3D({
     scene.add(mirrorRoot)
 
     const mirrorGlassWorld = new Vector3()
-    const worldUp = new Vector3(0, 1, 0)
     let mirrorGlassMesh: Mesh | null = null
+    let jabberEngravingMesh: Mesh | null = null
+    let jabberEngravingMat: MeshStandardMaterial | null = null
     let mirrorTransitionActive = false
     let pendingMirrorSuck = false
     let lastMirrorSuckRequestId = mirrorSuckRequestIdRef.current
     const mirrorTweenFromPos = new Vector3()
     const mirrorTweenToPos = new Vector3()
-    const mirrorTweenFromQuat = new Quaternion()
-    const mirrorTweenToQuat = new Quaternion()
     let mirrorTweenT0 = 0
-    const MIRROR_TWEEN_MS = 900
+    const MIRROR_TWEEN_MS = 1500
+    /** Stop just before the glass fills the view (meters). */
+    const MIRROR_SUCK_STOP_DIST = 0.35
     const mirrorForward = new Vector3()
-    const mirrorLookMat = new Matrix4()
 
     const startMirrorSuck = (nowMs: number) => {
       if (!mirrorGlassMesh) return
@@ -540,13 +612,9 @@ export function IntroScene3D({
       mirrorForward.normalize()
 
       mirrorTweenFromPos.copy(camera.position)
-      mirrorTweenFromQuat.copy(camera.quaternion)
 
-      // Move slightly “through” the glass along the camera→mirror direction.
-      mirrorTweenToPos.copy(mirrorGlassWorld).addScaledVector(mirrorForward, 0.08)
-
-      mirrorLookMat.lookAt(mirrorTweenToPos, mirrorGlassWorld, worldUp)
-      mirrorTweenToQuat.setFromRotationMatrix(mirrorLookMat)
+      // Stop close to the glass, but keep the mirror edge in view.
+      mirrorTweenToPos.copy(mirrorGlassWorld).addScaledVector(mirrorForward, -MIRROR_SUCK_STOP_DIST)
 
       mirrorTweenT0 = nowMs
       mirrorTransitionActive = true
@@ -782,11 +850,15 @@ export function IntroScene3D({
     canvas.addEventListener('wheel', onWheel, { passive: false })
 
     const loader = new GLTFLoader()
-    loader.load(
-      sceneGlbPath,
-      (gltf) => {
-        if (cancelled) return
-        const mirrorGroup = gltf.scene as Group
+    const mirrorGlbPromise = new Promise<void>((resolve) => {
+      loader.load(
+        sceneGlbPath,
+        (gltf) => {
+          if (cancelled) {
+            resolve()
+            return
+          }
+          const mirrorGroup = gltf.scene as Group
         mirrorRoot.add(mirrorGroup)
 
         // Fit → lay on floor (`FLOOR_WORLD_Y`) → +90° on Y → fit again (smaller MIRROR_MAX_DIM).
@@ -796,6 +868,34 @@ export function IntroScene3D({
         mirrorGroup.rotation.z = Math.PI / 2
         fitModelToGround(mirrorGroup, MIRROR_MAX_DIM)
         mirrorGroup.updateMatrixWorld(true)
+
+        const maxAniso = renderer.capabilities.getMaxAnisotropy()
+        mirrorGroup.traverse((obj) => {
+          if (!(obj instanceof Mesh)) return
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
+          for (const m of mats) {
+            if (!m) continue
+            const rec = m as unknown as Record<string, unknown>
+            for (const key of [
+              'map',
+              'alphaMap',
+              'bumpMap',
+              'normalMap',
+              'specularMap',
+              'roughnessMap',
+              'metalnessMap',
+              'emissiveMap',
+              'envMap',
+              'lightMap',
+              'aoMap',
+            ] as const) {
+              const jstexture = rec[key]
+              if (jstexture instanceof Texture) {
+                jstexture.anisotropy = maxAniso
+              }
+            }
+          }
+        })
 
         const size = new Vector3()
         new Box3().setFromObject(mirrorGroup).getSize(size)
@@ -808,6 +908,66 @@ export function IntroScene3D({
         mirrorGroup.traverse((obj) => {
           if (!(obj instanceof Mesh) || obj.name !== MIRROR_GLASS_MESH_NAME) return
           mirrorGlassMesh = obj
+
+          // Engraved Jabberwocky overlay: a thin plane in front of the reflector/glass.
+          // (Reflector itself is a separate plane; glass mesh is stencil-only.)
+          if (jabberEngravingMesh) {
+            jabberEngravingMesh.parent?.remove(jabberEngravingMesh)
+            jabberEngravingMesh.geometry.dispose()
+            jabberEngravingMat?.dispose()
+            jabberEngravingMesh = null
+            jabberEngravingMat = null
+          }
+          const texCanvas = makeJabberwockyEngravingTexture()
+          const alphaTex = new CanvasTexture(texCanvas)
+          // Alpha maps + mipmaps can “bleed” and haze the whole plane. Keep it crisp.
+          alphaTex.generateMipmaps = false
+          alphaTex.minFilter = LinearFilter
+          alphaTex.magFilter = LinearFilter
+          alphaTex.needsUpdate = true
+          jabberEngravingMat = new MeshStandardMaterial({
+            // Very deep gray “engraving” (not glowing white).
+            color: 0x1a1a1a,
+            transparent: true,
+            opacity: jabberwockyOpacityRef.current * 0.55,
+            alphaMap: alphaTex,
+            roughness: 1,
+            metalness: 0,
+            depthWrite: false,
+          })
+          jabberEngravingMat.alphaTest = 0.12
+
+          // Match the reflector plane sizing/orientation logic.
+          const geo = obj.geometry
+          if (!geo.boundingBox) geo.computeBoundingBox()
+          const bb = geo.boundingBox!
+          const { min, max } = bb
+          const sx = max.x - min.x
+          const sy = max.y - min.y
+          const sz = max.z - min.z
+          const axes = [
+            { k: 'x' as const, s: sx },
+            { k: 'y' as const, s: sy },
+            { k: 'z' as const, s: sz },
+          ].sort((a, b) => a.s - b.s)
+          const planeW = axes[2].s
+          const planeH = axes[1].s
+          const thin = axes[0].k
+          const cx = (min.x + max.x) / 2
+          const cy = (min.y + max.y) / 2
+          const cz = (min.z + max.z) / 2
+          const shortSide = Math.min(planeW, planeH)
+          const side = shortSide * MIRROR_REFLECTOR_PLANE_SCALE
+
+          jabberEngravingMesh = new Mesh(new PlaneGeometry(side, side), jabberEngravingMat)
+          jabberEngravingMesh.position.set(cx, cy, cz)
+          if (thin === 'x') jabberEngravingMesh.rotateY(Math.PI / 2)
+          else if (thin === 'y') jabberEngravingMesh.rotateX(-Math.PI / 2)
+          // Nudge toward camera slightly to avoid z-fighting with reflector.
+          jabberEngravingMesh.translateZ(0.0035)
+          jabberEngravingMesh.renderOrder = 20
+          obj.add(jabberEngravingMesh)
+
           if (mirrorReflector) {
             mirrorReflector.dispose()
             mirrorReflector.parent?.remove(mirrorReflector)
@@ -816,18 +976,25 @@ export function IntroScene3D({
           mirrorReflector = attachReflectorToMirrorGlass(obj)
         })
 
-      },
-      undefined,
-      (err) => {
-        console.warn('[IntroScene3D] scene GLB failed:', sceneGlbPath, err)
-      },
-    )
+          resolve()
+        },
+        undefined,
+        (err) => {
+          console.warn('[IntroScene3D] scene GLB failed:', sceneGlbPath, err)
+          resolve()
+        },
+      )
+    })
 
-    loader.load(
-      handGlbPath,
-      (gltf) => {
-        if (cancelled) return
-        const root = gltf.scene
+    const handGlbPromise = new Promise<void>((resolve) => {
+      loader.load(
+        handGlbPath,
+        (gltf) => {
+          if (cancelled) {
+            resolve()
+            return
+          }
+          const root = gltf.scene
         if (HAND_DEBUG_UNLIT) {
           applyFpsHandUnlitDebugMaterial(root)
         } else {
@@ -870,12 +1037,19 @@ export function IntroScene3D({
             obj.frustumCulled = false
           }
         })
-      },
-      undefined,
-      (err) => {
-        console.warn('[IntroScene3D] fps hand GLB failed:', handGlbPath, err)
-      },
-    )
+          resolve()
+        },
+        undefined,
+        (err) => {
+          console.warn('[IntroScene3D] fps hand GLB failed:', handGlbPath, err)
+          resolve()
+        },
+      )
+    })
+
+    void Promise.all([envMapPromise, mirrorGlbPromise, handGlbPromise]).then(() => {
+      if (!cancelled) setHdriGlbReady(true)
+    })
 
     let raf = 0
     const resize = () => {
@@ -919,9 +1093,19 @@ export function IntroScene3D({
 
       if (mirrorTransitionActive) {
         const t = Math.max(0, Math.min(1, (now - mirrorTweenT0) / MIRROR_TWEEN_MS))
-        const ease = t * t * (3 - 2 * t)
+        // Strong ease-out: late motion is much slower (lingers once the text is legible).
+        const ease = 1 - Math.pow(1 - t, 4)
         camera.position.lerpVectors(mirrorTweenFromPos, mirrorTweenToPos, ease)
-        camera.quaternion.slerpQuaternions(mirrorTweenFromQuat, mirrorTweenToQuat, ease)
+        // Fade curve (no zero): 0.5 → 0.9 → 1.
+        const e2 = ease <= 0.75 ? 0.5 + 0.4 * (ease / 0.75) : 0.9 + 0.1 * ((ease - 0.75) / 0.25)
+        if (e2 > jabberwockyOpacityRef.current) {
+          jabberwockyOpacityRef.current = e2
+          if (jabberEngravingMat) {
+            // Max opacity stays subtle; the “engraving” reads via contrast, not a white wash.
+            jabberEngravingMat.opacity = e2 * 0.55
+            jabberEngravingMat.needsUpdate = true
+          }
+        }
         if (t >= 1) {
           mirrorTransitionActive = false
           onMirrorSuckCompleteRef.current?.()
@@ -1082,6 +1266,9 @@ export function IntroScene3D({
 
   return (
     <>
+      {!loadOverlayDismissed ? (
+        <LoadingGraph assetsLoaded={hdriGlbReady} onComplete={() => setLoadOverlayDismissed(true)} />
+      ) : null}
       {SHOW_INTRO_CAMERA_UI && raycastDebug ? (
         <div
           style={{

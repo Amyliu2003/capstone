@@ -1,0 +1,252 @@
+{
+  "asset": {
+    "generator": "glTF-Transform v4.3.0",
+    "version": "2.0"
+  },
+  "accessors": [
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 818997,
+      "max": [
+        0.057514190673828125,
+        0.5,
+        0.252960205078125
+      ],
+      "min": [
+        -0.057514190673828125,
+        -0.5,
+        -0.252960205078125
+      ],
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 818997,
+      "bufferView": 0,
+      "byteOffset": 12
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5125,
+      "count": 3627321,
+      "bufferView": 1,
+      "byteOffset": 0
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5125,
+      "count": 714921,
+      "bufferView": 1,
+      "byteOffset": 14509284
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 126745,
+      "max": [
+        0.016191482543945312,
+        0.3489990234375,
+        0.1822052001953125
+      ],
+      "min": [
+        -0.017040252685546875,
+        -0.068389892578125,
+        -0.182159423828125
+      ],
+      "bufferView": 2,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 126745,
+      "bufferView": 2,
+      "byteOffset": 12
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 16379940,
+      "byteStride": 20,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 16379940,
+      "byteLength": 17368968,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 33748908,
+      "byteLength": 2534900,
+      "byteStride": 20,
+      "target": 34962
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 1,
+      "sampler": 0
+    },
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 2,
+      "sampler": 0
+    },
+    {
+      "source": 4,
+      "sampler": 0
+    },
+    {
+      "source": 3,
+      "sampler": 0
+    },
+    {
+      "source": 5,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "mirror_tripo_part_11_normal",
+      "mimeType": "image/jpeg",
+      "uri": "normal_1.jpg"
+    },
+    {
+      "name": "mirror_tripo_part_11_basecolor",
+      "mimeType": "image/jpeg",
+      "uri": "baseColor_1.jpg"
+    },
+    {
+      "name": "mirror_tripo_part_11_rm",
+      "mimeType": "image/png",
+      "uri": "metallicRoughness_1.png"
+    },
+    {
+      "name": "mirror_tripo_part_9_normal",
+      "mimeType": "image/jpeg",
+      "uri": "normal_2.jpg"
+    },
+    {
+      "name": "mirror_tripo_part_9_basecolor",
+      "mimeType": "image/jpeg",
+      "uri": "baseColor_2.jpg"
+    },
+    {
+      "name": "mirror_tripo_part_9_rm",
+      "mimeType": "image/png",
+      "uri": "metallicRoughness_2.png"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "mirror.bin",
+      "byteLength": 36283808
+    }
+  ],
+  "materials": [
+    {
+      "name": "Material_tripo_part_11.001",
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicRoughnessTexture": {
+          "index": 2
+        }
+      },
+      "normalTexture": {
+        "index": 1
+      }
+    },
+    {
+      "name": "Material_tripo_part_9.001",
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 3
+        },
+        "metallicRoughnessTexture": {
+          "index": 5
+        }
+      },
+      "normalTexture": {
+        "index": 4
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Mesh_0",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "TEXCOORD_0": 1
+          },
+          "mode": 4,
+          "material": 0,
+          "indices": 2
+        }
+      ]
+    },
+    {
+      "name": "Mesh_1",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 4,
+            "TEXCOORD_0": 5
+          },
+          "mode": 4,
+          "material": 1,
+          "indices": 3
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "tripo_part_11",
+      "mesh": 0
+    },
+    {
+      "name": "tripo_part_9",
+      "mesh": 1
+    },
+    {
+      "name": "ParentNode",
+      "children": [
+        0,
+        1
+      ]
+    }
+  ],
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        2
+      ]
+    }
+  ],
+  "scene": 0
+}
