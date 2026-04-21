@@ -76,6 +76,11 @@ This PRD is intentionally rebased on what already exists in the codebase:
 - **Save/load** exists via `localStorage` snapshots and settings scene.
 - **Intro episode** exists (3D garden, mirror, dialogue, hand customization).
 
+Presentation-script alignment note:
+
+- `docs/superpowers/specs/insight.md` describes a live demo where a **chat phrase** (e.g. “completely pointless”) gets echoed back inside an authoritative definition, and implies chess moves feed back into prompts.
+- In Phase 1, the “echo” effect is already achievable via the **playerDefinition→variants** constraint; the chat→prompt and chess→prompt loops are **Phase 2 requirements** unless implemented explicitly.
+
 ## Phase 1 scope (what we will build/finish)
 
 ### 1) Ship “Show & Tell scope” + one chaos beat (in-app)

@@ -87,6 +87,36 @@ Reference: `docs/superpowers/specs/2026-04-21-still-running-phase-1-prd-design.m
 
 ---
 
+## 3.3 Presentation script alignment (April 23 demo beats)
+
+The presentation script in `docs/superpowers/specs/insight.md` implies a specific “live demo” shape. This section exists to keep development aligned with what you plan to *say and show*.
+
+**Desired live-demo sequence**
+
+- Define a nonsense word (Etymology).
+- Type a frustrated thought into chat (Dialogue): e.g. “This is completely pointless and I want to stop.”
+- Pick a definition option (contract commit).
+- Make a chess move.
+- Observe π graph update.
+- Observe the system **echoing your own phrase** (“completely pointless”) in a subsequent authoritative definition (contract contamination).
+- (Optionally) claim the chess move is also fed into the next prompt (mechanics-to-text feedback).
+
+**Reality check (current implementation)**
+
+- The Etymology prompt already enforces: playerDefinition phrase must be incorporated verbatim into at least one variant.
+- Dialogue chat is currently separate; it does not automatically feed into the Etymology prompt unless explicitly wired.
+- Chess moves are recorded in `levelHistory`; they are not currently used as inputs to the Etymology prompt.
+
+**Requirement framing**
+
+- For Phase 1: we can show a version of this demo where the “echo” comes from the **playerDefinition** (already real), and note the chat→prompt + chess→prompt loop as a Phase‑2 requirement.
+- For Phase 2+: implement a unified contamination memory object that can include:
+  - last chat utterance(s) (player affect)
+  - last chess move(s) (player behavior)
+  - contract metadata (chosen variant, canonical vs not)
+
+---
+
 ## 4) System architecture (conceptual)
 
 ### 4.1 State machine (macro)
