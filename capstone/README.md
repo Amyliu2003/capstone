@@ -1,6 +1,21 @@
-# Capstone — Humpty Dumpty’s playground
+# Still Running (Capstone 2026)
 
-A browser game built with **React**, **TypeScript**, and **Vite**: progress through **etymology** (LLM-generated nonsense word histories in a Carroll / Humpty Dumpty style), **chess** (custom board with Stockfish), and a **π transition graph** — with save/load and a small design-token layer.
+**Primary product doc (start here)**: [`docs/superpowers/specs/2026-04-21-still-running-master-prd.md`](../docs/superpowers/specs/2026-04-21-still-running-master-prd.md)
+
+Still Running is a browser game built with **React**, **TypeScript**, and **Vite**: progress through **etymology** (meaning as contract), **chess** (rules as negotiated), and a **π transition graph** (structure made visible) — with save/load and a small design-token layer.
+
+<details>
+<summary><strong>Click: Project north star (locked)</strong></summary>
+
+- **One Rule**: “Every advance produces more interpretation, and every accumulation reduces meaningful difference.”
+- **Key phrases — do not change** (partial list):
+  - `π是无限的，但你不是`
+  - `heat death of the map not the machine`
+  - `You're nothing but a pack of tokens`
+  - `From here, there is no more generated content. Think your own thoughts.`
+  - `Still Running...`
+
+</details>
 
 ---
 
@@ -8,6 +23,7 @@ A browser game built with **React**, **TypeScript**, and **Vite**: progress thro
 
 | Area | What it does |
 |------|----------------|
+| **Intro** | 3D garden scene (Three.js): HDRI, mirror + FPS hands, `LoadingGraph` loading UI, scripted dialogue (H.D. / llorrac), and hand customization before entering the game. |
 | **Etymology** | Markov-generated or hand-typed words; optional player definition; LLM returns structured variants via a local API proxy (keys stay on the server). |
 | **Chess** | `UnlawfulChessboard` + `chess.js` + embedded Stockfish; snapshots for persistence. |
 | **Pi graph** | Digits of π drive edge transitions; canvas scales with the layout; level-gated edges. |
@@ -15,6 +31,7 @@ A browser game built with **React**, **TypeScript**, and **Vite**: progress thro
 | **Save / load** | Versioned `localStorage` snapshot (`capstone.gameSnapshot.v1`); settings UI for save, load, restart. |
 
 > [!NOTE]
+> For full product requirements and pipelines, read the Master PRD linked above.  
 > Detailed implementation notes live in [`docs/blog/PROJECT_SUMMARY.md`](docs/blog/PROJECT_SUMMARY.md). Etymology engine design notes: [`docs/blog/ETYMOLOGY_ENGINE_SUMMARY.md`](docs/blog/ETYMOLOGY_ENGINE_SUMMARY.md).
 
 ---
