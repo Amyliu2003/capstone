@@ -7,6 +7,33 @@ export type EtymologyPromptConfig = {
 
 export type { EtymologyResponse, EtymologyVariant } from './types'
 
+function buildClientFallbackVariants(word: string, playerDefinition?: string): EtymologyVariant[] {
+  const w = word.trim() || 'word'
+  const pd = playerDefinition?.trim()
+  const v0: EtymologyVariant = {
+    text: `${w} means the feeling just before something important happens, though nobody agrees on what.`,
+    pattern: 'Fallback',
+    century: '—',
+    origin_language: '—',
+    citations: [],
+  }
+  const v1: EtymologyVariant = {
+    text: `${w} is what you call it when two things are almost the same but neither will admit it.`,
+    pattern: 'Fallback',
+    century: '—',
+    origin_language: '—',
+    citations: [],
+  }
+  const v2: EtymologyVariant = {
+    text: pd && pd.length > 0 ? `${w} means ${pd.split(/\s+/).slice(0, 6).join(' ')}. (Or so you insist.)` : `${w} derives from an old word for 'Thursday' in a language that only had four days.`,
+    pattern: 'Fallback',
+    century: '—',
+    origin_language: '—',
+    citations: [],
+  }
+  return [v0, v1, v2]
+}
+
 function isEtymologyVariant(v: unknown): v is EtymologyVariant {
   if (!v || typeof v !== 'object') return false
   const obj = v as Record<string, unknown>
@@ -72,29 +99,38 @@ export async function fetchEtymology(
   promptConfig?: EtymologyPromptConfig,
   playerDefinition?: string,
 ): Promise<EtymologyResponse> {
-  const res = await fetch('/api/etymology', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      word,
-      promptConfig,
-      ...(playerDefinition != null && playerDefinition.trim() !== '' ? { playerDefinition: playerDefinition.trim() } : {}),
-    }),
-  })
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(text || `Request failed: ${res.status}`)
-  }
-
-  const data: unknown = await res.json()
-  // eslint-disable-next-line no-console
-  console.log('[etymology api] raw response:', JSON.stringify(data, null, 2))
   try {
-    return validateResponse(data)
+    const res = await fetch('/api/etymology', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        word,
+        promptConfig,
+        ...(playerDefinition != null && playerDefinition.trim() !== '' ? { playerDefinition: playerDefinition.trim() } : {}),
+      }),
+    })
+
+    if (!res.ok) {
+      // Keep 400s loud (bad request), but fall back for server-side 5xx.
+      const text = await res.text().catch(() => '')
+      if (res.status >= 500) {
+        return { word: word.trim(), variants: buildClientFallbackVariants(word, playerDefinition) }
+      }
+      throw new Error(text || `Request failed: ${res.status}`)
+    }
+
+    const data: unknown = await res.json()
+    // eslint-disable-next-line no-console
+    console.log('[etymology api] raw response:', JSON.stringify(data, null, 2))
+    try {
+      return validateResponse(data)
+    } catch {
+      const legacy = tryLegacyStringVariants(data)
+      if (legacy) return legacy
+      return { word: word.trim(), variants: buildClientFallbackVariants(word, playerDefinition) }
+    }
   } catch {
-    const legacy = tryLegacyStringVariants(data)
-    if (legacy) return legacy
-    throw new Error('Malformed response from server')
+    // Network / proxy failure (server down): client fallback keeps the loop playable.
+    return { word: word.trim(), variants: buildClientFallbackVariants(word, playerDefinition) }
   }
 }

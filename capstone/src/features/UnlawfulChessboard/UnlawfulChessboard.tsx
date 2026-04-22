@@ -88,6 +88,12 @@ type MoveRecord = { moveNumber: number; notation: string; illegal?: boolean }
 
 type Evaluation = { cp?: number; mate?: number; bestmove?: string } | null
 
+type RedQueenFeedback = {
+  symbol: '!!' | '!' | '?' | '??' | '□' | ''
+  line: string
+  deltaCp: number | null
+}
+
 function PieceSvg({ piece, size }: { piece: Piece; size: number }) {
   const s = size
   const isWhite = piece.color === 'w'
@@ -183,6 +189,11 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
   const evalBarWhiteRef = useRef<HTMLDivElement>(null)
   const evalBarDarkRef = useRef<HTMLDivElement>(null)
   const lastBarPercentRef = useRef(50)
+  const prevCpRef = useRef<number | null>(null)
+  const [muted, setMuted] = useState(false)
+  const [redQueenFeedback, setRedQueenFeedback] = useState<RedQueenFeedback | null>(null)
+  const [redQueenLineVisible, setRedQueenLineVisible] = useState(false)
+  const redQueenFadeTimeoutRef = useRef<number | null>(null)
 
     // Hydrate exact gameplay state when loading a saved game.
     useEffect(() => {
@@ -404,6 +415,129 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
               ? 'Unavailable'
               : null
 
+  const hdRuleLine = (() => {
+    if (!disabledRule) return 'Complete the puzzle above.'
+    const key = disabledRule.toLowerCase()
+    if (key.includes('en_passant') || key.includes('en passant')) {
+      return "Oh, and— no en passant this round. I find it so terribly fussy, don't you?"
+    }
+    if (key.includes('castle')) {
+      return "No castling this round. I find it so fussy, don't you?"
+    }
+    return "Certain rules have become—let's say—optional."
+  })()
+
+  const hdCollageWords = useCallback((text: string) => {
+    const words = text.split(/\s+/).filter(Boolean)
+    const families = [
+      "'IM Fell English', Palatino, serif",
+      "'IM Fell Double Pica', Georgia, serif",
+      'Georgia, serif',
+      "'Times New Roman', Times, serif",
+    ]
+    const sizePool = [13, 17, 22, 28]
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, lineHeight: 1.1 }}>
+        {words.map((w, i) => {
+          // Deterministic pseudo-random from index (no runtime RNG).
+          const seed = (i * 9301 + 49297) % 233280
+          const fontFamily = families[seed % families.length]!
+          const fontSize = sizePool[(seed >> 3) % sizePool.length]!
+          const fontWeight = (seed >> 5) % 2 === 0 ? 400 : 700
+          const fontStyle = (seed >> 7) % 2 === 0 ? 'normal' : 'italic'
+          const rot = ((seed % 400) / 400) * 4 - 2 // -2..+2
+          return (
+            <span
+              key={`${i}-${w}`}
+              style={{
+                display: 'inline-block',
+                fontFamily,
+                fontSize,
+                fontWeight,
+                fontStyle,
+                transform: `rotate(${rot.toFixed(2)}deg)`,
+                color: '#2c2418',
+              }}
+            >
+              {w}
+            </span>
+          )
+        })}
+      </div>
+    )
+  }, [])
+
+  const computeRedQueen = useCallback((prev: number | null, next: Evaluation): RedQueenFeedback | null => {
+    if (!next) return null
+    // Forced move detection is future; keep placeholder symbol only when mate exists.
+    if (next.mate !== undefined) {
+      return { symbol: '□', line: 'Of course. There was only one move.', deltaCp: null }
+    }
+    if (next.cp === undefined) return null
+    if (prev == null) return null
+    const delta = next.cp - prev
+    if (Math.abs(delta) <= 50) return { symbol: '', line: '', deltaCp: delta }
+    if (delta >= 300) return { symbol: '!!', line: 'Better. Not good enough. Again.', deltaCp: delta }
+    if (delta >= 100) return { symbol: '!', line: "That'll do. Move.", deltaCp: delta }
+    if (delta <= -300) return { symbol: '??', line: "That wouldn't be at all the thing.", deltaCp: delta }
+    return { symbol: '?', line: 'Wrong, as usual.', deltaCp: delta }
+  }, [])
+
+  useEffect(() => {
+    if (!evaluation || moveHistory.length === 0) return
+    const prev = prevCpRef.current
+    // Update prev first, so the delta is based on last known eval.
+    if (evaluation.cp !== undefined) prevCpRef.current = evaluation.cp
+    if (evaluation.mate !== undefined) prevCpRef.current = null
+
+    const feedback = computeRedQueen(prev, evaluation)
+    if (!feedback) return
+    setRedQueenFeedback(feedback)
+
+    // Silence case: no speech and no line render.
+    if (!feedback.line || !feedback.symbol) {
+      setRedQueenLineVisible(false)
+      if (redQueenFadeTimeoutRef.current) {
+        window.clearTimeout(redQueenFadeTimeoutRef.current)
+        redQueenFadeTimeoutRef.current = null
+      }
+      return
+    }
+
+    setRedQueenLineVisible(true)
+    if (redQueenFadeTimeoutRef.current) window.clearTimeout(redQueenFadeTimeoutRef.current)
+    redQueenFadeTimeoutRef.current = window.setTimeout(() => setRedQueenLineVisible(false), 2000)
+
+    if (!muted && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel()
+        const u = new SpeechSynthesisUtterance(feedback.line)
+        u.rate = 1.05
+        u.pitch = 0.85
+        u.volume = 0.75
+        window.speechSynthesis.speak(u)
+      } catch {
+        // ignore speech failures (permissions/voices not ready)
+      }
+    }
+  }, [evaluation, moveHistory.length, computeRedQueen, muted])
+
+  useEffect(() => {
+    return () => {
+      if (redQueenFadeTimeoutRef.current) {
+        window.clearTimeout(redQueenFadeTimeoutRef.current)
+        redQueenFadeTimeoutRef.current = null
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel()
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [])
+
   const handlePuzzleComplete = useCallback(() => {
     onComplete?.({
       moves: moveHistory.map((m) => ({ notation: m.notation, illegal: m.illegal })),
@@ -411,44 +545,101 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
   }, [onComplete, moveHistory])
 
     return (
-    <section style={{ display: 'grid', gap: 12 }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0 }}>Unlawful Chessboard</h2>
-        {disabledRule != null && (
-          <span style={{ fontSize: 14, opacity: 0.85 }}>
-            Disabled rule: <strong>{disabledRule}</strong> (not wired yet)
-          </span>
-        )}
-        <button type="button" onClick={resetBoard}>
-          Reset board
-        </button>
-        {onComplete && (
-          <button type="button" onClick={handlePuzzleComplete}>
-            Complete puzzle &amp; continue
-          </button>
-        )}
-        <span style={{ fontSize: 14, fontWeight: 600 }}>
-          {currentTurn === 'w' ? 'White' : 'Black'} to move
-        </span>
-        {evaluationText != null && (
-          <span style={{ fontSize: 14, opacity: 0.9 }}>
-            Stockfish: {evaluationText}
-          </span>
-        )}
-        {evaluationError && !evaluationLoading && (
-          <span style={{ fontSize: 12, opacity: 0.75 }} title={evaluationError}>
-            {evaluationError}
-          </span>
-        )}
+    <section style={{ display: 'grid', gap: 10 }}>
+      <header style={{ padding: '10px 12px', borderBottom: '0.5px solid #e8e0d4' }}>
+        <div
+          style={{
+            fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+            fontSize: 8,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: '#9a9080',
+            marginBottom: 6,
+          }}
+        >
+          H.D.
+        </div>
+        {hdCollageWords(hdRuleLine)}
       </header>
 
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          paddingLeft: 12,
+          paddingRight: 12,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+          <span
+            style={{
+              fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+              fontSize: 10,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: '#9a9080',
+            }}
+          >
+            {currentTurn === 'w' ? 'White' : 'Black'} to move
+          </span>
+          {evaluationText != null && (
+            <span
+              style={{
+                fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+                fontSize: 10,
+                color: '#9a9080',
+                opacity: 0.9,
+              }}
+            >
+              cp: {evaluationText}
+            </span>
+          )}
+          {evaluationError && !evaluationLoading && (
+            <span style={{ fontSize: 10, opacity: 0.7, color: '#9a9080' }} title={evaluationError}>
+              {evaluationError}
+            </span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMuted((v) => !v)
+            if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+              try {
+                window.speechSynthesis.cancel()
+              } catch {
+                // ignore
+              }
+            }
+          }}
+          style={{
+            fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+            fontSize: 10,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            padding: '6px 10px',
+            borderRadius: 2,
+            border: '0.5px solid rgba(154,144,128,0.7)',
+            background: 'transparent',
+            color: '#9a9080',
+            cursor: 'pointer',
+          }}
+          aria-pressed={muted}
+        >
+          {muted ? 'Muted' : 'Sound'}
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap', paddingLeft: 12, paddingRight: 12 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
           <div
             style={{
               width: EVAL_BAR_WIDTH,
               height: BOARD_SIZE,
-              backgroundColor: '#bbb',
+              backgroundColor: '#1a1f2e',
               borderRadius: 2,
               overflow: 'hidden',
               flexShrink: 0,
@@ -464,7 +655,7 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
                 right: 0,
                 top: 0,
                 height: `${lastBarPercentRef.current}%`,
-                backgroundColor: '#f5f0e8',
+                backgroundColor: '#d4c4a0',
                 borderRadius: '2px 2px 0 0',
                 minHeight: 2,
                 maxHeight: '100%',
@@ -478,13 +669,13 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
                 right: 0,
                 bottom: 0,
                 top: `${lastBarPercentRef.current}%`,
-                backgroundColor: '#2d2d2d',
+                backgroundColor: '#1a1f2e',
                 borderRadius: '0 0 2px 2px',
               }}
             />
           </div>
         </div>
-        <div style={{ border: '2px solid #333', borderRadius: 4 }}>
+        <div style={{ border: '1px solid rgba(26,31,46,0.55)', borderRadius: 4, overflow: 'hidden' }}>
           <svg
             width={BOARD_SIZE}
             height={BOARD_SIZE}
@@ -563,6 +754,109 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
             </g>
           )}
         </svg>
+        </div>
+
+        <div
+          style={{
+            width: BOARD_SIZE,
+            background: '#1a1f2e',
+            color: '#f5f0e8',
+            padding: '8px 12px',
+            borderRadius: 2,
+            display: 'grid',
+            gridTemplateColumns: 'auto auto auto 1fr',
+            gap: 10,
+            alignItems: 'baseline',
+          }}
+          aria-label="Red Queen evaluation"
+        >
+          <span
+            style={{
+              fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+              fontSize: 8,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: '#4a5060',
+            }}
+          >
+            Red Queen
+          </span>
+          <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10, color: '#9a9080' }}>
+            {redQueenFeedback?.deltaCp != null ? `${redQueenFeedback.deltaCp > 0 ? '+' : ''}${redQueenFeedback.deltaCp}` : '—'}
+          </span>
+          <span style={{ fontFamily: "'IM Fell Double Pica', Georgia, serif", fontSize: 20, fontWeight: 700, color: '#f5f0e8' }}>
+            {redQueenFeedback?.symbol ?? ''}
+          </span>
+          <span
+            style={{
+              fontFamily: "'IM Fell English', Palatino, serif",
+              fontStyle: 'italic',
+              fontSize: 13,
+              color: '#c8bfaa',
+              opacity: redQueenLineVisible ? 1 : 0,
+              transition: 'opacity 600ms ease',
+              minHeight: 18,
+            }}
+          >
+            {redQueenFeedback?.line ?? ''}
+          </span>
+        </div>
+
+        <div
+          style={{
+            width: BOARD_SIZE,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            paddingLeft: 2,
+            paddingRight: 2,
+          }}
+          aria-label="Chess actions"
+        >
+          <button
+            type="button"
+            onClick={resetBoard}
+            style={{
+              fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+              fontSize: 9,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              padding: '6px 10px',
+              borderRadius: 2,
+              border: '0.5px solid rgba(154,144,128,0.7)',
+              background: 'transparent',
+              color: '#9a9080',
+              cursor: 'pointer',
+            }}
+          >
+            Reset
+          </button>
+
+          <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 9, color: '#9a9080' }}>
+            Move {moveHistory.length} of ~5
+          </span>
+
+          <button
+            type="button"
+            onClick={handlePuzzleComplete}
+            disabled={!onComplete}
+            style={{
+              fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+              fontSize: 9,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              padding: '6px 10px',
+              borderRadius: 2,
+              border: '0.5px solid rgba(200,168,75,0.45)',
+              background: 'rgba(200,168,75,0.06)',
+              color: '#c8a84b',
+              cursor: onComplete ? 'pointer' : 'not-allowed',
+              opacity: onComplete ? 1 : 0.5,
+            }}
+          >
+            Continue →
+          </button>
         </div>
 
         <div

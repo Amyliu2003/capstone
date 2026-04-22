@@ -200,6 +200,21 @@ type EtymologyVariantPayload = {
   citations: string[]
 }
 
+function buildEtymologyFallbackVariants(word: string, playerDefinition?: string): EtymologyVariantPayload[] {
+  const a = generateTemplateFallback(word)
+  const b = generateTemplateFallback(word)
+  const pd = playerDefinition?.trim()
+  const c =
+    pd && pd.length > 0
+      ? `${word} means ${pd.split(/\s+/).slice(0, 6).join(' ')}. (Or so you insist.)`
+      : generateTemplateFallback(word)
+  return [
+    { text: a, pattern: 'Fallback', century: '—', origin_language: '—', citations: [] },
+    { text: b, pattern: 'Fallback', century: '—', origin_language: '—', citations: [] },
+    { text: c, pattern: 'Fallback', century: '—', origin_language: '—', citations: [] },
+  ]
+}
+
 function normalizeVariant(item: unknown, word: string): EtymologyVariantPayload {
   if (item && typeof item === 'object') {
     const obj = item as Record<string, unknown>
@@ -487,7 +502,10 @@ app.post('/api/etymology', async (req: Request, res: Response) => {
       )
       return
     }
-    res.status(500).send(msg)
+    // Fallback: keep the prototype playable even if the LLM fails transiently.
+    // eslint-disable-next-line no-console
+    console.warn('[etymology] fallback variants used:', msg)
+    res.status(200).json({ word: word.trim(), variants: buildEtymologyFallbackVariants(word.trim(), playerDefinition), fallback: true })
   }
 })
 
