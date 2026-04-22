@@ -19,6 +19,7 @@ This PRD covers:
 - The **full product goal** (Phase 2+ included)
 - The **playable vertical slice** (Phase 1)
 - All major **pipelines**: Etymology (LLM), Dialogue (RiveScript + LLM fallback), Chess (Stockfish), π Graph (rendering + progression), Persistence (snapshots), Presentation/Livestream Mode, Content authoring
+- A **UI redesign pass** (typography + visual layer only): `docs/superpowers/specs/2026-04-21-still-running-ui-redesign-prd.md`
 
 ---
 

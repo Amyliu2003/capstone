@@ -8,6 +8,10 @@ Primary narrative source: `capstone/storybaord.md` (Full Storyboard v3)
 
 This is the **production PRD**: the master reference that connects narrative intent to implementable pipelines and UI components. It is rebased on the current in-repo storyboard (`capstone/storybaord.md`) and updated with the new typography component spec (Collage + Glitch + Flicker).
 
+Related spec:
+
+- UI redesign (typography + visual layer only): `docs/superpowers/specs/2026-04-21-still-running-ui-redesign-prd.md`
+
 ## 1) North Star (locked)
 
 > **Every advance produces more interpretation, and every accumulation reduces meaningful difference.**
