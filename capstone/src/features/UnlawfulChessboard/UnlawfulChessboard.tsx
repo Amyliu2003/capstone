@@ -410,13 +410,13 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
         : evaluation?.mate !== undefined
           ? `Mate in ${Math.abs(evaluation.mate)}`
           : evaluation?.cp !== undefined
-            ? `${evaluation.cp > 0 ? '+' : ''}${(evaluation.cp / 100).toFixed(2)}`
+            ? `${evaluation.cp > 0 ? '+' : ''}${Math.round(evaluation.cp / 100)}`
             : moveHistory.length > 0
               ? 'Unavailable'
               : null
 
   const hdRuleLine = (() => {
-    if (!disabledRule) return 'Complete the puzzle above.'
+    if (!disabledRule) return ''
     const key = disabledRule.toLowerCase()
     if (key.includes('en_passant') || key.includes('en passant')) {
       return "Oh, and— no en passant this round. I find it so terribly fussy, don't you?"
@@ -467,20 +467,18 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
     )
   }, [])
 
-  const computeRedQueen = useCallback((prev: number | null, next: Evaluation): RedQueenFeedback | null => {
+  const computeRedQueen = useCallback((prev: number | null, next: Evaluation, forcedMove: boolean): RedQueenFeedback | null => {
     if (!next) return null
-    // Forced move detection is future; keep placeholder symbol only when mate exists.
-    if (next.mate !== undefined) {
-      return { symbol: '□', line: 'Of course. There was only one move.', deltaCp: null }
-    }
+    if (forcedMove) return { symbol: '□', line: 'Of course. There was only one move.', deltaCp: null }
     if (next.cp === undefined) return null
     if (prev == null) return null
     const delta = next.cp - prev
-    if (Math.abs(delta) <= 50) return { symbol: '', line: '', deltaCp: delta }
     if (delta >= 300) return { symbol: '!!', line: 'Better. Not good enough. Again.', deltaCp: delta }
     if (delta >= 100) return { symbol: '!', line: "That'll do. Move.", deltaCp: delta }
-    if (delta <= -300) return { symbol: '??', line: "That wouldn't be at all the thing.", deltaCp: delta }
-    return { symbol: '?', line: 'Wrong, as usual.', deltaCp: delta }
+    // Temporary: always speak (no silence band) to make demo feedback obvious.
+    if (delta >= -50) return { symbol: '', line: 'Move.', deltaCp: delta }
+    if (delta >= -300) return { symbol: '?', line: 'Wrong, as usual.', deltaCp: delta }
+    return { symbol: '??', line: "That wouldn't be at all the thing.", deltaCp: delta }
   }, [])
 
   useEffect(() => {
@@ -490,29 +488,20 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
     if (evaluation.cp !== undefined) prevCpRef.current = evaluation.cp
     if (evaluation.mate !== undefined) prevCpRef.current = null
 
-    const feedback = computeRedQueen(prev, evaluation)
+    const forcedMove = gameRef.current.moves().length === 1
+    const feedback = computeRedQueen(prev, evaluation, forcedMove)
     if (!feedback) return
     setRedQueenFeedback(feedback)
 
-    // Silence case: no speech and no line render.
-    if (!feedback.line || !feedback.symbol) {
-      setRedQueenLineVisible(false)
-      if (redQueenFadeTimeoutRef.current) {
-        window.clearTimeout(redQueenFadeTimeoutRef.current)
-        redQueenFadeTimeoutRef.current = null
-      }
-      return
-    }
-
     setRedQueenLineVisible(true)
     if (redQueenFadeTimeoutRef.current) window.clearTimeout(redQueenFadeTimeoutRef.current)
-    redQueenFadeTimeoutRef.current = window.setTimeout(() => setRedQueenLineVisible(false), 2000)
+    redQueenFadeTimeoutRef.current = window.setTimeout(() => setRedQueenLineVisible(false), 2500)
 
     if (!muted && typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel()
         const u = new SpeechSynthesisUtterance(feedback.line)
-        u.rate = 1.05
+        u.rate = feedback.symbol === '??' ? 1.2 : 1.05
         u.pitch = 0.85
         u.volume = 0.75
         window.speechSynthesis.speak(u)
@@ -546,21 +535,23 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
 
     return (
     <section style={{ display: 'grid', gap: 10 }}>
-      <header style={{ padding: '10px 12px', borderBottom: '0.5px solid #e8e0d4' }}>
-        <div
-          style={{
-            fontFamily: "'Share Tech Mono', 'Courier New', monospace",
-            fontSize: 8,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: '#9a9080',
-            marginBottom: 6,
-          }}
-        >
-          H.D.
-        </div>
-        {hdCollageWords(hdRuleLine)}
-      </header>
+      {hdRuleLine ? (
+        <header style={{ padding: '10px 12px', borderBottom: '0.5px solid #e8e0d4' }}>
+          <div
+            style={{
+              fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+              fontSize: 8,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#9a9080',
+              marginBottom: 6,
+            }}
+          >
+            H.D.
+          </div>
+          {hdCollageWords(hdRuleLine)}
+        </header>
+      ) : null}
 
       <div
         style={{
@@ -584,18 +575,7 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
           >
             {currentTurn === 'w' ? 'White' : 'Black'} to move
           </span>
-          {evaluationText != null && (
-            <span
-              style={{
-                fontFamily: "'Share Tech Mono', 'Courier New', monospace",
-                fontSize: 10,
-                color: '#9a9080',
-                opacity: 0.9,
-              }}
-            >
-              cp: {evaluationText}
-            </span>
-          )}
+          {/* cp value is intentionally not shown here; it belongs to the Red Queen strip only. */}
           {evaluationError && !evaluationLoading && (
             <span style={{ fontSize: 10, opacity: 0.7, color: '#9a9080' }} title={evaluationError}>
               {evaluationError}
@@ -756,10 +736,16 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
         </svg>
         </div>
 
+        {(() => {
+          const bg = '#1a1f2e'
+          const label = '#4a5060'
+          const delta = '#9a9080'
+          const symbolColor = '#f5f0e8'
+          return (
         <div
           style={{
             width: BOARD_SIZE,
-            background: '#1a1f2e',
+            background: bg,
             color: '#f5f0e8',
             padding: '8px 12px',
             borderRadius: 2,
@@ -776,15 +762,17 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
               fontSize: 8,
               letterSpacing: '0.12em',
               textTransform: 'uppercase',
-              color: '#4a5060',
+              color: label,
             }}
           >
             Red Queen
           </span>
-          <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10, color: '#9a9080' }}>
-            {redQueenFeedback?.deltaCp != null ? `${redQueenFeedback.deltaCp > 0 ? '+' : ''}${redQueenFeedback.deltaCp}` : '—'}
+          <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10, color: delta }}>
+            {redQueenFeedback?.deltaCp != null
+              ? `${redQueenFeedback.deltaCp > 0 ? '+' : ''}${redQueenFeedback.deltaCp}`
+              : ''}
           </span>
-          <span style={{ fontFamily: "'IM Fell Double Pica', Georgia, serif", fontSize: 20, fontWeight: 700, color: '#f5f0e8' }}>
+          <span style={{ fontFamily: "'IM Fell Double Pica', Georgia, serif", fontSize: 20, fontWeight: 700, color: symbolColor }}>
             {redQueenFeedback?.symbol ?? ''}
           </span>
           <span
@@ -800,7 +788,8 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
           >
             {redQueenFeedback?.line ?? ''}
           </span>
-        </div>
+        </div>)
+        })()}
 
         <div
           style={{
