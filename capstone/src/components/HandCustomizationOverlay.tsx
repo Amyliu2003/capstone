@@ -85,41 +85,6 @@ function OptionGrid<T extends string>({
   )
 }
 
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T
-  options: Array<{ id: T; label: string }>
-  onChange: (next: T) => void
-}) {
-  return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-      {options.map((opt) => {
-        const active = opt.id === value
-        return (
-          <button
-            key={opt.id}
-            type="button"
-            onClick={() => onChange(opt.id)}
-            style={{
-              padding: '10px 12px',
-              borderRadius: 999,
-              border: active ? '1px solid rgba(255,255,255,0.8)' : '1px solid rgba(255,255,255,0.25)',
-              background: active ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.25)',
-              color: '#f2f2f2',
-              fontSize: 13,
-            }}
-          >
-            {opt.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 export function HandCustomizationOverlay({ visible, initial, onConfirm }: HandCustomizationOverlayProps) {
   const defaults = useMemo<AgentParams>(
     () => initial ?? { color: 'ivory', size: 'medium', accessory: 'none' },

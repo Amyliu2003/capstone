@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { theme } from '../styles/theme'
 

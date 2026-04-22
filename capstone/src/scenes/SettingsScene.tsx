@@ -1,5 +1,3 @@
-import { DSButton } from '../designSystem/components/DSButton'
-
 export type SettingsSceneProps = {
   onBack: () => void
   onSave: () => void
@@ -14,47 +12,74 @@ export function SettingsScene(props: SettingsSceneProps) {
   return (
     <section
       style={{
-        flex: 1,
-        minHeight: 0,
-        overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        gap: 0,
+        backgroundColor: '#f5f0e8',
+        padding: '0 32px',
       }}
       aria-label="Settings"
     >
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <h2 style={{ margin: 0 }}>Settings</h2>
-        <DSButton type="button" onClick={onBack}>
-          Back
-        </DSButton>
-      </header>
-
       <div
         style={{
-          display: 'grid',
-          gap: 10,
-          border: '1px solid var(--ds-border, #333)',
-          borderRadius: 'var(--ds-radius, 8px)',
-          padding: 12,
+          fontFamily: "'Share Tech Mono', monospace",
+          fontSize: 9,
+          letterSpacing: '0.22em',
+          textTransform: 'uppercase',
+          color: '#9a9080',
+          marginBottom: 32,
         }}
       >
-        <div style={{ fontSize: 14, opacity: 0.85 }}>Placeholder (add toggles later).</div>
+        — paused —
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-        <DSButton type="button" onClick={onSave}>
-          Save
-        </DSButton>
-        <DSButton type="button" onClick={onLoad}>
-          Load
-        </DSButton>
-        <DSButton type="button" onClick={onRestart}>
-          Restart
-        </DSButton>
-        <DSButton type="button" onClick={onResetGame}>
-          Reset game
-        </DSButton>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 240 }}>
+        {(() => {
+          const baseButtonStyle: React.CSSProperties = {
+            fontFamily: "'Share Tech Mono', monospace",
+            fontSize: 11,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            padding: '10px 16px',
+            borderRadius: 2,
+            border: '0.5px solid #c8bfaa',
+            background: 'transparent',
+            color: '#2c2418',
+            cursor: 'pointer',
+            width: '100%',
+            textAlign: 'center',
+          }
+          return (
+            <>
+              <button type="button" onClick={onBack} style={baseButtonStyle}>
+                Back
+              </button>
+              <button type="button" onClick={onSave} style={baseButtonStyle}>
+                Save
+              </button>
+              <button type="button" onClick={onLoad} style={baseButtonStyle}>
+                Load
+              </button>
+              <button type="button" onClick={onRestart} style={baseButtonStyle}>
+                Restart
+              </button>
+              <button
+                type="button"
+                onClick={onResetGame}
+                style={{
+                  ...baseButtonStyle,
+                  border: '0.5px solid rgba(139,26,26,0.35)',
+                  color: '#8b1a1a',
+                }}
+              >
+                Reset game
+              </button>
+            </>
+          )
+        })()}
       </div>
     </section>
   )

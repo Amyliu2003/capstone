@@ -18,6 +18,8 @@ export interface DialogueBoxProps {
 export function DialogueBox({ visible, node, onAdvance, npcOnly = false }: DialogueBoxProps) {
   if (!visible || !node) return null
 
+  const playerAvatar = <ThreeFrame width={100} height={100} />
+
   const handleAutoClick = () => {
     if (node.type === 'auto') onAdvance()
   }
@@ -47,18 +49,18 @@ export function DialogueBox({ visible, node, onAdvance, npcOnly = false }: Dialo
           width: '100%',
           maxWidth: 900,
           margin: 0,
-          border: '1px solid var(--ds-border, #333)',
-          padding: 12,
+          border: 'none',
+          borderBottom: '0.5px solid var(--sr-dialogue-border, #c8bfaa)',
+          padding: '6px 10px',
           overflowY: 'auto',
+          backgroundColor: 'var(--sr-dialogue-surface, #f5f0e8)',
         }}
       >
-        <div style={{ fontSize: 11, marginBottom: 4, color: 'var(--ds-subtle, #666)' }}>H.D.</div>
+        <div style={{ fontSize: 11, marginBottom: 4, color: 'var(--sr-dialogue-subtle, var(--ds-subtle, #666))' }}>H.D.</div>
         <div>{node.npc}</div>
       </section>
     )
   }
-
-  const playerAvatar = <ThreeFrame width={100} height={100} />
 
   return (
     <section
@@ -66,12 +68,13 @@ export function DialogueBox({ visible, node, onAdvance, npcOnly = false }: Dialo
         width: '100%',
         maxWidth: 900,
         margin: 0,
-        border: '1px solid var(--ds-border, #333)',
-        padding: 12,
+        borderTop: '0.5px solid var(--sr-dialogue-border, #c8bfaa)',
+        padding: '6px 10px',
+        backgroundColor: 'var(--sr-dialogue-surface, #f5f0e8)',
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 8,
       }}
       onClick={node.type === 'auto' ? handleAutoClick : undefined}
     >

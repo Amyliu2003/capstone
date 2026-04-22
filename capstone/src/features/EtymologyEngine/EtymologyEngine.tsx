@@ -27,9 +27,12 @@ const defaultCorpus: CorpusConfig = { text: JABBERWOCKY }
 /** Label for choice cards: `variant.text` only — never `explanation`, the full object, or stringified JSON. */
 function variantCardLabel(variant: EtymologyVariant): string {
   const text = variant.text
-  if (text.length > 100) {
+  // Longer outputs are OK (the UI wraps + scrolls); keep this check as a light-touch regression signal.
+  // Warn once per session only, and only for extreme lengths.
+  if (text.length > 180 && !(window as unknown as { __sr_warnedLongVariantText?: boolean }).__sr_warnedLongVariantText) {
+    ;(window as unknown as { __sr_warnedLongVariantText?: boolean }).__sr_warnedLongVariantText = true
     // eslint-disable-next-line no-console
-    console.warn('[EtymologyEngine] variant.text longer than 100 characters — possible regression.', text.length)
+    console.warn('[EtymologyEngine] variant.text longer than 180 characters — check prompt constraints.', text.length)
   }
   return text
 }
@@ -43,8 +46,6 @@ export type EtymologyQuizRadioListProps = {
 
 /** Radio-style quiz list + full-width Confirm (used in level mode and GameScene). */
 export function EtymologyQuizRadioList({ variants, selected, onSelect, onConfirm }: EtymologyQuizRadioListProps) {
-  // eslint-disable-next-line no-console
-  console.log('variants count:', variants.length)
   return (
     <div
       style={{

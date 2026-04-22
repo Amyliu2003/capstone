@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability */
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { piDigits, maxDigits } from './piDigits'
 import type { PiGraphSnapshot } from '../../gameSave/gameStorage'
@@ -9,6 +10,7 @@ const DEFAULT_SIZE = 400
 const DIGITS_PER_FRAME_INTERVAL = 60
 const PROGRESS_SPEED = 0.03
 const WEIGHT_GROWTH = 6
+const BG = '#080a0f'
 
 /** Default visuals (overridable via props for design-system injection). */
 const DEFAULT_NODE_FILL = '#f5f0e5'
@@ -235,7 +237,9 @@ export const PiGraphCanvas = forwardRef<PiGraphCanvasHandle, PiGraphCanvasProps>
       const nodeRadius = width * NODE_RADIUS_RATIO
       const headRadius = width * HEAD_RADIUS_RATIO
 
-      ctx.clearRect(0, 0, width, height)
+      ctx.globalAlpha = 1
+      ctx.fillStyle = BG
+      ctx.fillRect(0, 0, width, height)
 
       const { nodeFill: vf, nodeStroke: vs, edgeStroke: es, animatedEdgeStroke: aes, labelColor: lc } = visualsRef.current
 
@@ -251,8 +255,9 @@ export const PiGraphCanvas = forwardRef<PiGraphCanvasHandle, PiGraphCanvasProps>
           ctx.moveTo(a.x, a.y)
           ctx.lineTo(b.x, b.y)
           ctx.strokeStyle = es
-          ctx.globalAlpha = 0.3 + 0.5 * (w / maxW)
-          ctx.lineWidth = 1 + 2 * (w / maxW)
+          const t = w / maxW
+          ctx.globalAlpha = 0.2 + 0.6 * t
+          ctx.lineWidth = 0.5 + 2.0 * t
           ctx.stroke()
           ctx.globalAlpha = 1
         }
@@ -264,7 +269,7 @@ export const PiGraphCanvas = forwardRef<PiGraphCanvasHandle, PiGraphCanvasProps>
         ctx.fillStyle = vf
         ctx.fill()
         ctx.strokeStyle = vs
-        ctx.lineWidth = 1
+        ctx.lineWidth = Math.max(0.75, width * 0.002)
         ctx.stroke()
       }
 
@@ -288,7 +293,7 @@ export const PiGraphCanvas = forwardRef<PiGraphCanvasHandle, PiGraphCanvasProps>
       }
 
       ctx.fillStyle = lc
-      ctx.font = `${Math.max(10, width * 0.022)}px system-ui, sans-serif`
+      ctx.font = `14px "Share Tech Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       for (const n of nodes) {

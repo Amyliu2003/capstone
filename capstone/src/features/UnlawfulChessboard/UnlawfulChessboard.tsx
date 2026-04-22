@@ -196,8 +196,8 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
   const prevCpRef = useRef<number | null>(null)
   const [muted, setMuted] = useState(false)
   const [redQueenFeedback, setRedQueenFeedback] = useState<RedQueenFeedback | null>(null)
-  const [redQueenLineVisible, setRedQueenLineVisible] = useState(false)
-  const redQueenFadeTimeoutRef = useRef<number | null>(null)
+  const [lineVisible, setLineVisible] = useState(false)
+  const [displayedLine, setDisplayedLine] = useState('')
 
     // Hydrate exact gameplay state when loading a saved game.
     useEffect(() => {
@@ -407,19 +407,6 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
     lastBarPercentRef.current = targetBarPercent
   }, [targetBarPercent])
 
-  const evaluationText =
-    evaluationLoading
-      ? 'Evaluating…'
-      : evaluationError
-        ? 'Unavailable'
-        : evaluation?.mate !== undefined
-          ? `Mate in ${Math.abs(evaluation.mate)}`
-          : evaluation?.cp !== undefined
-            ? `${evaluation.cp > 0 ? '+' : ''}${Math.round(evaluation.cp / 100)}`
-            : moveHistory.length > 0
-              ? 'Unavailable'
-              : null
-
   const hdRuleLine = (() => {
     if (!disabledRule) return ''
     const key = disabledRule.toLowerCase()
@@ -493,14 +480,15 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
     if (evaluation.cp !== undefined) prevCpRef.current = evaluation.cp
     if (evaluation.mate !== undefined) prevCpRef.current = null
 
+    // Red Queen only comments on *our* moves (we play Black).
+    // currentTurn is the side to move next; if it's White now, Black just moved.
+    // (We still update prevCpRef for opponent moves so the next delta isolates our move.)
+    if (currentTurn !== 'w') return
+
     const forcedMove = gameRef.current.moves().length === 1
     const feedback = computeRedQueen(prev, evaluation, forcedMove)
     if (!feedback) return
     setRedQueenFeedback(feedback)
-
-    setRedQueenLineVisible(true)
-    if (redQueenFadeTimeoutRef.current) window.clearTimeout(redQueenFadeTimeoutRef.current)
-    redQueenFadeTimeoutRef.current = window.setTimeout(() => setRedQueenLineVisible(false), 2500)
 
     if (!muted && typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
@@ -514,14 +502,23 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
         // ignore speech failures (permissions/voices not ready)
       }
     }
-  }, [evaluation, moveHistory.length, computeRedQueen, muted])
+  }, [evaluation, moveHistory.length, computeRedQueen, muted, currentTurn])
+
+  const redQueenLine = redQueenFeedback?.line ?? ''
+  useEffect(() => {
+    if (!redQueenLine) {
+      setDisplayedLine('')
+      setLineVisible(false)
+      return
+    }
+    setDisplayedLine(redQueenLine)
+    setLineVisible(true)
+    const timer = window.setTimeout(() => setLineVisible(false), 2500)
+    return () => window.clearTimeout(timer)
+  }, [redQueenLine])
 
   useEffect(() => {
     return () => {
-      if (redQueenFadeTimeoutRef.current) {
-        window.clearTimeout(redQueenFadeTimeoutRef.current)
-        redQueenFadeTimeoutRef.current = null
-      }
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         try {
           window.speechSynthesis.cancel()
@@ -538,10 +535,45 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
     })
   }, [onComplete, moveHistory])
 
+  const SHOW_MOVE_RECORD = false
+
+  const moveRecordLines = (() => {
+    if (moveHistory.length === 0) {
+      return <div style={{ color: '#555' }}>No moves yet.</div>
+    }
+    const lines: React.ReactNode[] = []
+    let lastNum = 0
+    moveHistory.forEach((record, i) => {
+      const isWhite = i % 2 === 0
+      if (isWhite) {
+        lastNum = record.moveNumber
+        lines.push(
+          <span key={`n-${i}`} style={{ marginRight: 4, color: '#555' }}>
+            {lastNum}.
+          </span>,
+        )
+      }
+      lines.push(
+        <span
+          key={i}
+          style={{
+            marginRight: 8,
+            color: record.illegal ? '#c4622d' : '#1a1a1a',
+            fontStyle: record.illegal ? 'italic' : undefined,
+          }}
+          title={record.illegal ? 'Unlawful move' : undefined}
+        >
+          {record.notation}
+        </span>,
+      )
+    })
+    return <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', alignItems: 'baseline', color: '#1a1a1a' }}>{lines}</div>
+  })()
+
     return (
-    <section style={{ display: 'grid', gap: 10 }}>
+    <section style={{ display: 'grid', gap: 6 }}>
       {hdRuleLine ? (
-        <header style={{ padding: '10px 12px', borderBottom: '0.5px solid #e8e0d4' }}>
+        <header style={{ padding: '8px 10px', borderBottom: '0.5px solid #e8e0d4' }}>
           <div
             style={{
               fontFamily: "'Share Tech Mono', 'Courier New', monospace",
@@ -564,8 +596,8 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 12,
-          paddingLeft: 12,
-          paddingRight: 12,
+          paddingLeft: 8,
+          paddingRight: 8,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
@@ -618,14 +650,14 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap', paddingLeft: 12, paddingRight: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap', paddingLeft: 8, paddingRight: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
           <div
             style={{
               width: EVAL_BAR_WIDTH,
               height: BOARD_SIZE,
               backgroundColor: '#1a1f2e',
-              borderRadius: 2,
+              borderRadius: 0,
               overflow: 'hidden',
               flexShrink: 0,
               position: 'relative',
@@ -641,7 +673,7 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
                 top: 0,
                 height: `${lastBarPercentRef.current}%`,
                 backgroundColor: '#d4c4a0',
-                borderRadius: '2px 2px 0 0',
+                borderRadius: 0,
                 minHeight: 2,
                 maxHeight: '100%',
               }}
@@ -655,18 +687,18 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
                 bottom: 0,
                 top: `${lastBarPercentRef.current}%`,
                 backgroundColor: '#1a1f2e',
-                borderRadius: '0 0 2px 2px',
+                borderRadius: 0,
               }}
             />
           </div>
-        </div>
-        <div style={{ border: '1px solid rgba(26,31,46,0.55)', borderRadius: 4, overflow: 'hidden' }}>
-          <svg
-            width={BOARD_SIZE}
-            height={BOARD_SIZE}
-            viewBox={`0 0 ${BOARD_SIZE} ${BOARD_SIZE}`}
-            style={{ display: 'block' }}
-          >
+
+          <div style={{ border: '1px solid rgba(26,31,46,0.55)', borderRadius: 4, overflow: 'hidden' }}>
+            <svg
+              width={BOARD_SIZE}
+              height={BOARD_SIZE}
+              viewBox={`0 0 ${BOARD_SIZE} ${BOARD_SIZE}`}
+              style={{ display: 'block' }}
+            >
           <g>
             {Array.from({ length: 8 }, (_, row) =>
               Array.from({ length: 8 }, (_, col) => {
@@ -739,25 +771,25 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
             </g>
           )}
         </svg>
+          </div>
         </div>
 
         {(() => {
-          const bg = '#1a1f2e'
-          const label = '#4a5060'
-          const delta = '#9a9080'
-          const symbolColor = '#f5f0e8'
+          const symbol = redQueenFeedback?.symbol ?? ''
+          const deltaDisplay =
+            redQueenFeedback?.deltaCp != null ? `${redQueenFeedback.deltaCp > 0 ? '+' : ''}${redQueenFeedback.deltaCp}` : ''
+          const rqBg = symbol === '' ? '#1a1f2e' : '#252b3d'
           return (
         <div
           style={{
-            width: BOARD_SIZE,
-            background: bg,
-            color: '#f5f0e8',
-            padding: '8px 12px',
-            borderRadius: 2,
-            display: 'grid',
-            gridTemplateColumns: 'auto auto auto 1fr',
+            display: 'flex',
+            alignItems: 'center',
             gap: 10,
-            alignItems: 'baseline',
+            width: BOARD_SIZE,
+            padding: '6px 10px',
+            background: rqBg,
+            minHeight: 40,
+            borderRadius: 2,
           }}
           aria-label="Red Queen evaluation"
         >
@@ -765,33 +797,46 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
             style={{
               fontFamily: "'Share Tech Mono', 'Courier New', monospace",
               fontSize: 8,
-              letterSpacing: '0.12em',
+              letterSpacing: '0.14em',
               textTransform: 'uppercase',
-              color: label,
+              color: symbol === '' ? '#4a5060' : '#6a7080',
             }}
           >
-            Red Queen
+            RED QUEEN
           </span>
-          <span style={{ fontFamily: "'Share Tech Mono', 'Courier New', monospace", fontSize: 10, color: delta }}>
-            {redQueenFeedback?.deltaCp != null
-              ? `${redQueenFeedback.deltaCp > 0 ? '+' : ''}${redQueenFeedback.deltaCp}`
-              : ''}
+          <span
+            style={{
+              fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+              fontSize: 10,
+              color: symbol === '' ? '#4a5060' : '#c8bfaa',
+            }}
+          >
+            {deltaDisplay}
           </span>
-          <span style={{ fontFamily: "'IM Fell Double Pica', Georgia, serif", fontSize: 20, fontWeight: 700, color: symbolColor }}>
-            {redQueenFeedback?.symbol ?? ''}
+          <span
+            style={{
+              fontFamily: "'IM Fell Double Pica', Georgia, serif",
+              fontSize: 24,
+              fontWeight: 700,
+              color: symbol === '' ? '#4a5060' : '#f5f0e8',
+              minWidth: 28,
+            }}
+          >
+            {symbol}
           </span>
           <span
             style={{
               fontFamily: "'IM Fell English', Palatino, serif",
               fontStyle: 'italic',
               fontSize: 13,
-              color: '#c8bfaa',
-              opacity: redQueenLineVisible ? 1 : 0,
-              transition: 'opacity 600ms ease',
+              color: '#e8e0d4',
+              opacity: lineVisible ? 1 : 0,
+              transition: 'opacity 0.4s ease',
               minHeight: 18,
+              flex: 1,
             }}
           >
-            {redQueenFeedback?.line ?? ''}
+            {displayedLine}
           </span>
         </div>)
         })()}
@@ -852,62 +897,34 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
             Continue →
           </button>
         </div>
+      </div>
 
+      {SHOW_MOVE_RECORD ? (
         <div
           style={{
-            minWidth: 200,
-            maxWidth: 280,
-            minHeight: 120,
-            maxHeight: BOARD_SIZE,
+            padding: '6px 10px',
+            borderTop: '0.5px solid #c8bfaa',
+            backgroundColor: '#f5f0e8',
+            maxHeight: 80,
             overflow: 'hidden',
-            padding: 12,
-            border: '1px solid #ccc',
-            borderRadius: 4,
-            backgroundColor: '#fafafa',
-            color: '#1a1a1a',
-            fontSize: 14,
-            flexShrink: 0,
           }}
           aria-label="Move record"
         >
-          <div style={{ fontWeight: 600, marginBottom: 8, color: '#1a1a1a' }}>Move record</div>
-          {moveHistory.length === 0 ? (
-            <div style={{ color: '#555' }}>No moves yet.</div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', alignItems: 'baseline', color: '#1a1a1a' }}>
-              {(() => {
-                const lines: React.ReactNode[] = []
-                let lastNum = 0
-                moveHistory.forEach((record, i) => {
-                  const isWhite = i % 2 === 0
-                  if (isWhite) {
-                    lastNum = record.moveNumber
-                    lines.push(
-                      <span key={`n-${i}`} style={{ marginRight: 4, color: '#555' }}>
-                        {lastNum}.
-                      </span>,
-                    )
-                  }
-                  lines.push(
-                    <span
-                      key={i}
-                      style={{
-                        marginRight: 8,
-                        color: record.illegal ? '#c4622d' : '#1a1a1a',
-                        fontStyle: record.illegal ? 'italic' : undefined,
-                      }}
-                      title={record.illegal ? 'Unlawful move' : undefined}
-                    >
-                      {record.notation}
-                    </span>,
-                  )
-                })
-                return lines
-              })()}
-            </div>
-          )}
+          <div
+            style={{
+              fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+              fontSize: 9,
+              letterSpacing: '0.08em',
+              color: '#9a9080',
+              textTransform: 'uppercase',
+              marginBottom: 4,
+            }}
+          >
+            Move record
+          </div>
+          {moveRecordLines}
         </div>
-      </div>
+      ) : null}
     </section>
     )
   },

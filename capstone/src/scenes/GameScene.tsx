@@ -73,6 +73,65 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
   const [dialogueFetching, setDialogueFetching] = useState(false)
   const [dialogueHdLine, setDialogueHdLine] = useState<string | null>(null)
 
+  const variantVars = useMemo((): Record<string, string> => {
+    // Phase decides the base surface; level provides a small accent variation (sq I–VIII).
+    const sq = Math.min(8, Math.max(1, currentLevel || 1))
+    const accentBySq = [
+      '#c8a84b', // I
+      '#bfa24a', // II
+      '#d0ad52', // III
+      '#c39b3f', // IV
+      '#d4b35b', // V
+      '#b9923b', // VI
+      '#d2ac4c', // VII
+      '#c8a84b', // VIII
+    ]
+    const accent = accentBySq[sq - 1] ?? '#c8a84b'
+
+    if (currentPhase === 'pi') {
+      return {
+        '--sr-app-bg': '#080a0f',
+        '--sr-app-fg': '#f5f0e8',
+        '--sr-surface-1': '#080a0f',
+        '--sr-surface-2': 'rgba(0,0,0,0.18)',
+        '--sr-border': `rgba(200,168,75,0.18)`,
+        '--sr-subtle': `rgba(200,168,75,0.28)`,
+        '--sr-accent': accent,
+        '--sr-accent-rgb': '200,168,75',
+        '--sr-dialogue-surface': '#080a0f',
+        '--sr-dialogue-border': `rgba(200,168,75,0.18)`,
+        '--sr-dialogue-subtle': `rgba(200,168,75,0.28)`,
+      }
+    }
+
+    // Default cream theme (etymology + chess for now).
+    return {
+      '--sr-app-bg': '#f5f0e8',
+      '--sr-app-fg': '#2c2418',
+      '--sr-surface-1': '#f5f0e8',
+      '--sr-surface-2': '#e8e0d4',
+      '--sr-border': '#c8bfaa',
+      '--sr-subtle': 'var(--ds-subtle, #666)',
+      '--sr-accent': accent,
+      '--sr-accent-rgb': '200,168,75',
+      '--sr-dialogue-surface': '#f5f0e8',
+      '--sr-dialogue-border': '#c8bfaa',
+      '--sr-dialogue-subtle': 'var(--ds-subtle, #666)',
+    }
+  }, [currentPhase, currentLevel])
+
+  useEffect(() => {
+    // Apply theme globally so AppFrame (which sits above GameScene) also updates.
+    if (typeof document === 'undefined') return
+    const el = document.documentElement
+    for (const [k, v] of Object.entries(variantVars)) {
+      el.style.setProperty(k, v)
+    }
+    return () => {
+      // No-op cleanup: next theme application overwrites variables.
+    }
+  }, [variantVars])
+
   useEffect(() => {
     setEtymologyChoose(null)
   }, [runSeed])
@@ -207,7 +266,7 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
       return { type: 'auto', npc: dialogueHdLine }
     }
     if (currentPhase === 'chess') {
-      return { type: 'auto', npc: 'Complete the puzzle above.' }
+      return null
     }
     if (currentPhase === 'pi') {
       return { type: 'auto', npc: 'Continue when ready.' }
@@ -257,7 +316,7 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: 6,
         width: '100%',
         height: '100%',
         minHeight: 0,
@@ -280,17 +339,14 @@ export function GameScene({ onRestartToIntro }: { onRestartToIntro: () => void }
           flexWrap: 'wrap',
           justifyContent: 'center',
           textAlign: 'center',
+          paddingTop: 4,
+          paddingBottom: 4,
         }}
       >
         <span style={{ fontWeight: 600 }}>Level {currentLevel}</span>
         <span style={{ fontSize: 14, opacity: 0.85 }}>
           Phase: {currentPhase === 'etymology' ? 'Etymology' : currentPhase === 'chess' ? 'Chess' : 'Pi Graph'}
         </span>
-        {currentPhase !== 'etymology' && (
-          <DSButton type="button" onClick={() => setDialogueOpen((v) => !v)}>
-            {dialogueOpen ? 'Hide dialogue' : 'Ask H.D.'}
-          </DSButton>
-        )}
         <DSButton type="button" onClick={() => setPage('settings')}>
           Settings
         </DSButton>

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 export function AppFrame({ children }: { children: ReactNode }) {
   return (
     <div
+      className="font-base"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -13,8 +14,8 @@ export function AppFrame({ children }: { children: ReactNode }) {
         margin: 0,
         boxSizing: 'border-box',
         overflow: 'hidden',
-        backgroundColor: '#ffffff',
-        color: '#1a1a1a',
+        backgroundColor: 'var(--sr-app-bg, #f5f0e8)',
+        color: 'var(--sr-app-fg, #2c2418)',
       }}
     >
       {children}
