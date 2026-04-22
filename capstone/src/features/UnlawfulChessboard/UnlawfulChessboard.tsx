@@ -6,17 +6,21 @@ import type { ChessSnapshot, SerializedBoardState } from '../../gameSave/gameSto
 const EVAL_BAR_WIDTH = 14
 const EVAL_BAR_ANIMATION_DURATION = 0.4
 
-/** Maps cp/mate to 0–100 (50 = equal, >50 = white advantage). */
+const STARTING_FEN_BLACK_TO_MOVE = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1'
+
+/** Maps cp/mate to 0–100 (50 = equal, >50 = black advantage). */
 function evaluationToBarPercent(evaluation: Evaluation): number {
   if (!evaluation) return 50
   if (evaluation.mate !== undefined) {
-    if (evaluation.mate > 0) return 95
-    if (evaluation.mate < 0) return 5
+    // mate > 0 = black mates sooner (black POV)
+    if (evaluation.mate > 0) return 5
+    if (evaluation.mate < 0) return 95
     return 50
   }
   if (evaluation.cp !== undefined) {
     const clip = Math.max(-50, Math.min(50, evaluation.cp / 10))
-    return 50 + clip
+    // cp > 0 = black advantage (black POV): shrink white bar, grow dark bar.
+    return 50 - clip
   }
   return 50
 }
@@ -174,14 +178,14 @@ export type UnlawfulChessboardHandle = {
 export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulChessboardProps>(
   function UnlawfulChessboard(props: UnlawfulChessboardProps = {}, ref) {
     const { disabledRule, initialChessSnapshot, onComplete } = props
-  const gameRef = useRef(new Chess())
+  const gameRef = useRef(new Chess(STARTING_FEN_BLACK_TO_MOVE))
   const [boardState, setBoardState] = useState<BoardState>(() =>
-    cloneBoard(new Chess().board() as BoardState),
+    cloneBoard(new Chess(STARTING_FEN_BLACK_TO_MOVE).board() as BoardState),
   )
   const [selected, setSelected] = useState<{ row: number; col: number } | null>(null)
   const [movingPiece, setMovingPiece] = useState<MovingPiece | null>(null)
   const [moveHistory, setMoveHistory] = useState<MoveRecord[]>([])
-  const [currentTurn, setCurrentTurn] = useState<'w' | 'b'>('w')
+  const [currentTurn, setCurrentTurn] = useState<'w' | 'b'>('b')
   const [evaluation, setEvaluation] = useState<Evaluation>(null)
   const [evaluationLoading, setEvaluationLoading] = useState(false)
   const [evaluationError, setEvaluationError] = useState<string | null>(null)
@@ -370,14 +374,15 @@ export const UnlawfulChessboard = forwardRef<UnlawfulChessboardHandle, UnlawfulC
   })()
 
   const resetBoard = useCallback(() => {
-    gameRef.current.reset()
+    gameRef.current = new Chess(STARTING_FEN_BLACK_TO_MOVE)
     setBoardState(cloneBoard(gameRef.current.board() as BoardState))
     setSelected(null)
     setMovingPiece(null)
     setMoveHistory([])
-    setCurrentTurn('w')
+    setCurrentTurn('b')
     setEvaluation(null)
     setEvaluationError(null)
+    prevCpRef.current = null
   }, [])
 
   const targetBarPercent = evaluationToBarPercent(evaluation)

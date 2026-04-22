@@ -649,7 +649,23 @@ app.post('/api/chess/evaluate', async (req: Request, res: Response) => {
   }
   try {
     const result = await runStockfishEval(fen)
-    res.json(result)
+    const parts = fen.split(/\s+/)
+    const turn = parts[1] === 'b' ? 'b' : 'w'
+
+    // Normalize ALL evaluations to Black POV:
+    // Positive cp/mate always means "better for Black", regardless of side-to-move.
+    //
+    // Stockfish `score cp`/`score mate` is typically reported from the side-to-move POV.
+    // Under that convention:
+    // - if turn === 'b' → score already in Black POV
+    // - if turn === 'w' → score is in White POV, so flip sign to get Black POV
+    const flip = turn === 'w' ? -1 : 1
+    const normalized = {
+      ...result,
+      cp: result.cp !== undefined ? result.cp * flip : undefined,
+      mate: result.mate !== undefined ? result.mate * flip : undefined,
+    }
+    res.json(normalized)
   } catch (e) {
     res.status(503).json({
       error: 'Stockfish not available. Install it (e.g. brew install stockfish) or set STOCKFISH_PATH.',
