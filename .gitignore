@@ -17,3 +17,6 @@ pnpm-debug.log*
 # Local brainstorming companion session state (keep content, ignore machine-local state)
 .superpowers/**/state/
 
+# Local brainstorm content drops (generated HTML screens)
+.superpowers/brainstorm/
+
