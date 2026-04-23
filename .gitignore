@@ -20,3 +20,6 @@ pnpm-debug.log*
 # Local brainstorm content drops (generated HTML screens)
 .superpowers/brainstorm/
 
+# Git worktrees (local, machine-specific)
+.worktrees/
+
